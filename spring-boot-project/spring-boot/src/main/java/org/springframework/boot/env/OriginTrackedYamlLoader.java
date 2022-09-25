@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ class OriginTrackedYamlLoader extends YamlProcessor {
 		BaseConstructor constructor = new OriginTrackingConstructor(loaderOptions);
 		Representer representer = new Representer();
 		DumperOptions dumperOptions = new DumperOptions();
-		LimitedResolver resolver = new LimitedResolver();
+		NoTimestampResolver resolver = new NoTimestampResolver();
 		return new Yaml(constructor, representer, dumperOptions, loaderOptions, resolver);
 	}
 
@@ -97,7 +97,7 @@ class OriginTrackedYamlLoader extends YamlProcessor {
 		@Override
 		public Object getData() throws NoSuchElementException {
 			Object data = super.getData();
-			if (data instanceof CharSequence && ((CharSequence) data).length() == 0) {
+			if (data instanceof CharSequence charSequence && charSequence.isEmpty()) {
 				return null;
 			}
 			return data;
@@ -113,8 +113,8 @@ class OriginTrackedYamlLoader extends YamlProcessor {
 					return constructTrackedObject(node, super.constructObject(node));
 				}
 			}
-			if (node instanceof MappingNode) {
-				replaceMappingNodeKeys((MappingNode) node);
+			if (node instanceof MappingNode mappingNode) {
+				replaceMappingNodeKeys(mappingNode);
 			}
 			return super.constructObject(node);
 		}
@@ -156,8 +156,8 @@ class OriginTrackedYamlLoader extends YamlProcessor {
 		}
 
 		private static Node get(Node node) {
-			if (node instanceof ScalarNode) {
-				return new KeyScalarNode((ScalarNode) node);
+			if (node instanceof ScalarNode scalarNode) {
+				return new KeyScalarNode(scalarNode);
 			}
 			return node;
 		}
@@ -167,14 +167,14 @@ class OriginTrackedYamlLoader extends YamlProcessor {
 	/**
 	 * {@link Resolver} that limits {@link Tag#TIMESTAMP} tags.
 	 */
-	private static class LimitedResolver extends Resolver {
+	private static class NoTimestampResolver extends Resolver {
 
 		@Override
-		public void addImplicitResolver(Tag tag, Pattern regexp, String first) {
+		public void addImplicitResolver(Tag tag, Pattern regexp, String first, int limit) {
 			if (tag == Tag.TIMESTAMP) {
 				return;
 			}
-			super.addImplicitResolver(tag, regexp, first);
+			super.addImplicitResolver(tag, regexp, first, limit);
 		}
 
 	}

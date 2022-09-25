@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,14 @@
 
 package org.springframework.boot.maven;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
 
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,9 +39,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Andy Wilkinson
  * @author Madhura Bhave
+ * @author Scott Frederick
  */
 @ExtendWith(MavenBuildExtension.class)
 class JarIntegrationTests extends AbstractArchiveIntegrationTests {
+
+	@Override
+	protected String getLayersIndexLocation() {
+		return "BOOT-INF/layers.idx";
+	}
 
 	@TestTemplate
 	void whenJarIsRepackagedInPlaceOnlyRepackagedJarIsInstalled(MavenBuild mavenBuild) {
@@ -61,7 +63,7 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 			}).hasEntryWithNameStartingWith("BOOT-INF/lib/spring-context")
 					.hasEntryWithNameStartingWith("BOOT-INF/lib/spring-core")
 					.hasEntryWithNameStartingWith("BOOT-INF/lib/spring-jcl")
-					.hasEntryWithNameStartingWith("BOOT-INF/lib/jakarta.servlet-api-4")
+					.hasEntryWithNameStartingWith("BOOT-INF/lib/jakarta.servlet-api-5")
 					.hasEntryWithName("BOOT-INF/classes/org/test/SampleApplication.class")
 					.hasEntryWithName("org/springframework/boot/loader/JarLauncher.class");
 			assertThat(buildLog(project)).contains("Replacing main artifact with repackaged archive")
@@ -364,6 +366,20 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 	}
 
 	@TestTemplate
+	void repackagedJarContainsClasspathIndex(MavenBuild mavenBuild) {
+		mavenBuild.project("jar").execute((project) -> {
+			File repackaged = new File(project, "target/jar-0.0.1.BUILD-SNAPSHOT.jar");
+			assertThat(jar(repackaged)).manifest(
+					(manifest) -> manifest.hasAttribute("Spring-Boot-Classpath-Index", "BOOT-INF/classpath.idx"));
+			assertThat(jar(repackaged)).hasEntryWithName("BOOT-INF/classpath.idx");
+			try (JarFile jarFile = new JarFile(repackaged)) {
+				List<String> index = readClasspathIndex(jarFile, "BOOT-INF/classpath.idx");
+				assertThat(index).allMatch((entry) -> entry.startsWith("BOOT-INF/lib/"));
+			}
+		});
+	}
+
+	@TestTemplate
 	void whenJarIsRepackagedWithOutputTimestampConfiguredThenJarIsReproducible(MavenBuild mavenBuild)
 			throws InterruptedException {
 		String firstHash = buildJarWithOutputTimestamp(mavenBuild);
@@ -394,24 +410,17 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 		return jarHash.get();
 	}
 
-	private Map<String, List<String>> readLayerIndex(JarFile jarFile) throws IOException {
-		Map<String, List<String>> index = new LinkedHashMap<>();
-		ZipEntry indexEntry = jarFile.getEntry("BOOT-INF/layers.idx");
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(jarFile.getInputStream(indexEntry)))) {
-			String line = reader.readLine();
-			String layer = null;
-			while (line != null) {
-				if (line.startsWith("- ")) {
-					layer = line.substring(3, line.length() - 2);
-					index.put(layer, new ArrayList<>());
-				}
-				else if (line.startsWith("  - ")) {
-					index.computeIfAbsent(layer, (key) -> new ArrayList<>()).add(line.substring(5, line.length() - 1));
-				}
-				line = reader.readLine();
-			}
-			return index;
-		}
+	@TestTemplate
+	void whenJarIsRepackagedWithOutputTimestampConfiguredThenLibrariesAreSorted(MavenBuild mavenBuild) {
+		mavenBuild.project("jar-output-timestamp").execute((project) -> {
+			File repackaged = new File(project, "target/jar-output-timestamp-0.0.1.BUILD-SNAPSHOT.jar");
+			List<String> sortedLibs = Arrays.asList("BOOT-INF/lib/jakarta.servlet-api", "BOOT-INF/lib/spring-aop",
+					"BOOT-INF/lib/spring-beans", "BOOT-INF/lib/spring-boot-jarmode-layertools",
+					"BOOT-INF/lib/spring-context", "BOOT-INF/lib/spring-core", "BOOT-INF/lib/spring-expression",
+					"BOOT-INF/lib/spring-jcl");
+			assertThat(jar(repackaged)).entryNamesInPath("BOOT-INF/lib/").zipSatisfy(sortedLibs,
+					(String jarLib, String expectedLib) -> assertThat(jarLib).startsWith(expectedLib));
+		});
 	}
 
 }

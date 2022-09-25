@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,15 @@
 package org.springframework.boot.logging.logback;
 
 import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Handler;
 import java.util.logging.LogManager;
@@ -57,14 +61,15 @@ import org.springframework.core.convert.support.ConfigurableConversionService;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.contentOf;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link LogbackLoggingSystem}.
@@ -77,6 +82,7 @@ import static org.mockito.Mockito.verify;
  * @author Vedran Pavic
  * @author Robert Thornton
  * @author Eddú Meléndez
+ * @author Scott Frederick
  */
 @ExtendWith(OutputCaptureExtension.class)
 class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
@@ -502,6 +508,30 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 	}
 
 	@Test
+	void initializeShouldApplyLogbackSystemPropertiesToTheContext() {
+		this.environment.setProperty("logging.logback.rollingpolicy.file-name-pattern", "file-name-pattern");
+		this.environment.setProperty("logging.logback.rollingpolicy.clean-history-on-start", "true");
+		this.environment.setProperty("logging.logback.rollingpolicy.max-file-size", "10MB");
+		this.environment.setProperty("logging.logback.rollingpolicy.total-size-cap", "100MB");
+		this.environment.setProperty("logging.logback.rollingpolicy.max-history", "20");
+		this.loggingSystem.beforeInitialize();
+		initialize(this.initializationContext, null, null);
+		LoggerContext loggerContext = (LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory();
+		Map<String, String> properties = loggerContext.getCopyOfPropertyMap();
+		Set<String> expectedProperties = new HashSet<String>();
+		ReflectionUtils.doWithFields(LogbackLoggingSystemProperties.class,
+				(field) -> expectedProperties.add((String) field.get(null)), this::isPublicStaticFinal);
+		expectedProperties.removeAll(Arrays.asList("LOG_FILE", "LOG_PATH"));
+		assertThat(properties).containsOnlyKeys(expectedProperties);
+		assertThat(properties).containsEntry("CONSOLE_LOG_CHARSET", Charset.defaultCharset().name());
+	}
+
+	private boolean isPublicStaticFinal(Field field) {
+		int modifiers = field.getModifiers();
+		return Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers);
+	}
+
+	@Test
 	void initializationIsOnlyPerformedOnceUntilCleanedUp() {
 		LoggerContext loggerContext = (LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory();
 		LoggerContextListener listener = mock(LoggerContextListener.class);
@@ -510,23 +540,42 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 		initialize(this.initializationContext, null, null);
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
-		verify(listener, times(1)).onReset(loggerContext);
+		then(listener).should().onReset(loggerContext);
 		this.loggingSystem.cleanUp();
 		loggerContext.addListener(listener);
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
-		verify(listener, times(2)).onReset(loggerContext);
+		then(listener).should(times(2)).onReset(loggerContext);
 	}
 
 	@Test
-	void testDateformatPatternProperty(CapturedOutput output) {
-		this.environment.setProperty("logging.pattern.dateformat", "yyyy-MM-dd'T'hh:mm:ss.SSSZ");
-		new LoggingSystemProperties(this.environment).apply();
+	void testDateformatPatternDefault(CapturedOutput output) {
 		LoggingInitializationContext loggingInitializationContext = new LoggingInitializationContext(this.environment);
 		initialize(loggingInitializationContext, null, null);
 		this.logger.info("Hello world");
 		assertThat(getLineWithText(output, "Hello world"))
-				.containsPattern("\\d{4}-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}");
+				.containsPattern("\\d{4}-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}([-+]\\d{2}:\\d{2}|Z)");
+	}
+
+	@Test
+	void testDateformatPatternProperty(CapturedOutput output) {
+		this.environment.setProperty("logging.pattern.dateformat", "dd-MM-yyyy");
+		new LoggingSystemProperties(this.environment).apply();
+		LoggingInitializationContext loggingInitializationContext = new LoggingInitializationContext(this.environment);
+		initialize(loggingInitializationContext, null, null);
+		this.logger.info("Hello world");
+		assertThat(getLineWithText(output, "Hello world")).containsPattern("\\d{2}-\\d{2}-\\d{4}\\s");
+	}
+
+	@Test // gh-24835
+	void testDateformatPatternPropertyDirect(CapturedOutput output) {
+		this.environment.setProperty("logging.pattern.dateformat", "yyyy");
+		new LoggingSystemProperties(this.environment).apply();
+		this.environment.setProperty("logging.pattern.dateformat", "dd-MM-yyyy");
+		LoggingInitializationContext loggingInitializationContext = new LoggingInitializationContext(this.environment);
+		initialize(loggingInitializationContext, null, null);
+		this.logger.info("Hello world");
+		assertThat(getLineWithText(output, "Hello world")).containsPattern("\\d{2}-\\d{2}-\\d{4}\\s");
 	}
 
 	@Test

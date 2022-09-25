@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,15 @@ package org.springframework.boot.actuate.autoconfigure.metrics.orm.jpa;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.persistence.Entity;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.PersistenceException;
 import javax.sql.DataSource;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.PersistenceException;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -37,6 +37,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.EntityManagerFactoryBuilderCustomizer;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
+import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -132,9 +133,9 @@ class HibernateMetricsAutoConfigurationTests {
 
 	@Test
 	void entityManagerFactoryInstrumentationDoesNotDeadlockWithDeferredInitialization() {
-		this.contextRunner
-				.withPropertyValues("spring.jpa.properties.hibernate.generate_statistics:true",
-						"spring.datasource.schema=city-schema.sql", "spring.datasource.data=city-data.sql")
+		this.contextRunner.withPropertyValues("spring.jpa.properties.hibernate.generate_statistics:true",
+				"spring.sql.init.schema-locations:city-schema.sql", "spring.sql.init.data-locations=city-data.sql")
+				.withConfiguration(AutoConfigurations.of(SqlInitializationAutoConfiguration.class))
 				.withBean(EntityManagerFactoryBuilderCustomizer.class,
 						() -> (builder) -> builder.setBootstrapExecutor(new SimpleAsyncTaskExecutor()))
 				.run((context) -> {

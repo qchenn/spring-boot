@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,16 @@
 
 package org.springframework.boot.context.properties;
 
+import java.lang.reflect.Constructor;
 import java.util.Map;
 
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.ClassFileVersion;
+import net.bytebuddy.description.annotation.AnnotationDescription;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.ThrowingConsumer;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBean.BindMethod;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -41,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
  * Tests for {@link ConfigurationPropertiesBean}.
  *
  * @author Phillip Webb
+ * @author Madhura Bhave
  */
 class ConfigurationPropertiesBeanTests {
 
@@ -69,6 +75,15 @@ class ConfigurationPropertiesBeanTests {
 			assertThat(valueObject.getType()).isEqualTo(ValueObject.class);
 			assertThat(valueObject.getAnnotation()).isNotNull();
 			assertThat(valueObject.getBindMethod()).isEqualTo(BindMethod.VALUE_OBJECT);
+		}
+	}
+
+	@Test
+	void getAllDoesNotFindABeanDeclaredInAStaticBeanMethodOnAConfigurationAndConfigurationPropertiesAnnotatedClass() {
+		try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(
+				StaticBeanMethodConfiguration.class)) {
+			Map<String, ConfigurationPropertiesBean> all = ConfigurationPropertiesBean.getAll(context);
+			assertThat(all).containsOnlyKeys("configurationPropertiesBeanTests.StaticBeanMethodConfiguration");
 		}
 	}
 
@@ -201,7 +216,7 @@ class ConfigurationPropertiesBeanTests {
 	}
 
 	@Test
-	void forValueObjectReturnsBean() {
+	void forValueObjectWithConstructorBindingAnnotatedClassReturnsBean() {
 		ConfigurationPropertiesBean propertiesBean = ConfigurationPropertiesBean
 				.forValueObject(ConstructorBindingOnConstructor.class, "valueObjectBean");
 		assertThat(propertiesBean.getName()).isEqualTo("valueObjectBean");
@@ -214,6 +229,30 @@ class ConfigurationPropertiesBeanTests {
 		assertThat(target.getValue()).isNull();
 		assertThat(ConfigurationPropertiesBindConstructorProvider.INSTANCE
 				.getBindConstructor(ConstructorBindingOnConstructor.class, false)).isNotNull();
+	}
+
+	@Test
+	void forValueObjectWithRecordReturnsBean() {
+		Class<?> implicitConstructorBinding = new ByteBuddy(ClassFileVersion.JAVA_V16).makeRecord()
+				.name("org.springframework.boot.context.properties.ImplicitConstructorBinding")
+				.annotateType(AnnotationDescription.Builder.ofType(ConfigurationProperties.class)
+						.define("prefix", "implicit").build())
+				.defineRecordComponent("someString", String.class).defineRecordComponent("someInteger", Integer.class)
+				.make().load(getClass().getClassLoader()).getLoaded();
+		ConfigurationPropertiesBean propertiesBean = ConfigurationPropertiesBean
+				.forValueObject(implicitConstructorBinding, "implicitBindingRecord");
+		assertThat(propertiesBean.getName()).isEqualTo("implicitBindingRecord");
+		assertThat(propertiesBean.getInstance()).isNull();
+		assertThat(propertiesBean.getType()).isEqualTo(implicitConstructorBinding);
+		assertThat(propertiesBean.getBindMethod()).isEqualTo(BindMethod.VALUE_OBJECT);
+		assertThat(propertiesBean.getAnnotation()).isNotNull();
+		Bindable<?> target = propertiesBean.asBindTarget();
+		assertThat(target.getType()).isEqualTo(ResolvableType.forClass(implicitConstructorBinding));
+		assertThat(target.getValue()).isNull();
+		Constructor<?> bindConstructor = ConfigurationPropertiesBindConstructorProvider.INSTANCE
+				.getBindConstructor(implicitConstructorBinding, false);
+		assertThat(bindConstructor).isNotNull();
+		assertThat(bindConstructor.getParameterTypes()).containsExactly(String.class, Integer.class);
 	}
 
 	@Test
@@ -235,14 +274,14 @@ class ConfigurationPropertiesBeanTests {
 	}
 
 	@Test
-	void bindTypeForTypeWhenNoConstructorBindingOnTypeReturnsValueObject() {
-		BindMethod bindType = BindMethod.forType(ConstructorBindingOnType.class);
+	void bindTypeForTypeWhenConstructorBindingOnConstructorReturnsValueObject() {
+		BindMethod bindType = BindMethod.forType(ConstructorBindingOnConstructor.class);
 		assertThat(bindType).isEqualTo(BindMethod.VALUE_OBJECT);
 	}
 
 	@Test
-	void bindTypeForTypeWhenNoConstructorBindingOnConstructorReturnsValueObject() {
-		BindMethod bindType = BindMethod.forType(ConstructorBindingOnConstructor.class);
+	void bindTypeForTypeWhenNoConstructorBindingAnnotationOnSingleParameterizedConstructorReturnsValueObject() {
+		BindMethod bindType = BindMethod.forType(ConstructorBindingNoAnnotation.class);
 		assertThat(bindType).isEqualTo(BindMethod.VALUE_OBJECT);
 	}
 
@@ -252,6 +291,42 @@ class ConfigurationPropertiesBeanTests {
 				.isThrownBy(() -> BindMethod.forType(ConstructorBindingOnMultipleConstructors.class))
 				.withMessage(ConstructorBindingOnMultipleConstructors.class.getName()
 						+ " has more than one @ConstructorBinding constructor");
+	}
+
+	@Test
+	void bindTypeForTypeWithMultipleConstructorsReturnJavaBean() {
+		BindMethod bindType = BindMethod.forType(NoConstructorBindingOnMultipleConstructors.class);
+		assertThat(bindType).isEqualTo(BindMethod.JAVA_BEAN);
+	}
+
+	@Test
+	void bindTypeForTypeWithNoArgConstructorReturnsJavaBean() {
+		BindMethod bindType = BindMethod.forType(JavaBeanWithNoArgConstructor.class);
+		assertThat(bindType).isEqualTo(BindMethod.JAVA_BEAN);
+	}
+
+	@Test
+	void bindTypeForTypeWithSingleArgAutowiredConstructorReturnsJavaBean() {
+		BindMethod bindType = BindMethod.forType(JavaBeanWithAutowiredConstructor.class);
+		assertThat(bindType).isEqualTo(BindMethod.JAVA_BEAN);
+	}
+
+	@Test
+	void constructorBindingAndAutowiredConstructorsShouldThrowException() {
+		assertThatIllegalStateException()
+				.isThrownBy(() -> BindMethod.forType(ConstructorBindingAndAutowiredConstructors.class));
+	}
+
+	@Test
+	void innerClassWithSyntheticFieldShouldReturnJavaBean() {
+		BindMethod bindType = BindMethod.forType(Inner.class);
+		assertThat(bindType).isEqualTo(BindMethod.JAVA_BEAN);
+	}
+
+	@Test
+	void innerClassWithParameterizedConstructorShouldReturnJavaBean() {
+		BindMethod bindType = BindMethod.forType(ParameterizedConstructorInner.class);
+		assertThat(bindType).isEqualTo(BindMethod.JAVA_BEAN);
 	}
 
 	private void get(Class<?> configuration, String beanName, ThrowingConsumer<ConfigurationPropertiesBean> consumer)
@@ -417,7 +492,6 @@ class ConfigurationPropertiesBeanTests {
 	}
 
 	@ConfigurationProperties
-	@ConstructorBinding
 	static class ValueObject {
 
 		ValueObject(String name) {
@@ -439,10 +513,9 @@ class ConfigurationPropertiesBeanTests {
 	}
 
 	@ConfigurationProperties
-	@ConstructorBinding
-	static class ConstructorBindingOnType {
+	static class ConstructorBindingNoAnnotation {
 
-		ConstructorBindingOnType(String name) {
+		ConstructorBindingNoAnnotation(String name) {
 		}
 
 	}
@@ -474,6 +547,48 @@ class ConfigurationPropertiesBeanTests {
 
 	}
 
+	@ConfigurationProperties
+	static class NoConstructorBindingOnMultipleConstructors {
+
+		NoConstructorBindingOnMultipleConstructors(String name) {
+			this(name, -1);
+		}
+
+		NoConstructorBindingOnMultipleConstructors(String name, int age) {
+		}
+
+	}
+
+	@ConfigurationProperties
+	static class JavaBeanWithAutowiredConstructor {
+
+		@Autowired
+		JavaBeanWithAutowiredConstructor(String name) {
+		}
+
+	}
+
+	@ConfigurationProperties
+	static class JavaBeanWithNoArgConstructor {
+
+		JavaBeanWithNoArgConstructor() {
+		}
+
+	}
+
+	@ConfigurationProperties
+	static class ConstructorBindingAndAutowiredConstructors {
+
+		@Autowired
+		ConstructorBindingAndAutowiredConstructors(String name) {
+		}
+
+		@ConstructorBinding
+		ConstructorBindingAndAutowiredConstructors(Integer age) {
+		}
+
+	}
+
 	@Configuration(proxyBeanMethods = false)
 	@Import(NonAnnotatedBeanConfigurationImportSelector.class)
 	static class NonAnnotatedBeanImportConfiguration {
@@ -485,6 +600,31 @@ class ConfigurationPropertiesBeanTests {
 		@Override
 		public String[] selectImports(AnnotationMetadata importingClassMetadata) {
 			return new String[] { NonAnnotatedBeanConfiguration.class.getName() };
+		}
+
+	}
+
+	@ConfigurationProperties
+	class Inner {
+
+	}
+
+	@ConfigurationProperties
+	class ParameterizedConstructorInner {
+
+		ParameterizedConstructorInner(Integer age) {
+
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConfigurationProperties
+	static class StaticBeanMethodConfiguration {
+
+		@Bean
+		static String stringBean() {
+			return "example";
 		}
 
 	}

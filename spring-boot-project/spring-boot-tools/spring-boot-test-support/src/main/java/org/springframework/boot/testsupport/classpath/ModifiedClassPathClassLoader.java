@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,8 @@ final class ModifiedClassPathClassLoader extends URLClassLoader {
 
 	@Override
 	public Class<?> loadClass(String name) throws ClassNotFoundException {
-		if (name.startsWith("org.junit") || name.startsWith("org.hamcrest")) {
+		if (name.startsWith("org.junit") || name.startsWith("org.hamcrest")
+				|| name.startsWith("io.netty.internal.tcnative")) {
 			return Class.forName(name, false, this.junitLoader);
 		}
 		return super.loadClass(name);
@@ -114,8 +115,8 @@ final class ModifiedClassPathClassLoader extends URLClassLoader {
 	}
 
 	private static Stream<URL> doExtractUrls(ClassLoader classLoader) {
-		if (classLoader instanceof URLClassLoader) {
-			return Stream.of(((URLClassLoader) classLoader).getURLs());
+		if (classLoader instanceof URLClassLoader urlClassLoader) {
+			return Stream.of(urlClassLoader.getURLs());
 		}
 		return Stream.of(ManagementFactory.getRuntimeMXBean().getClassPath().split(File.pathSeparator))
 				.map(ModifiedClassPathClassLoader::toURL);
@@ -131,11 +132,7 @@ final class ModifiedClassPathClassLoader extends URLClassLoader {
 	}
 
 	private static boolean isManifestOnlyJar(URL url) {
-		return isSurefireBooterJar(url) || isShortenedIntelliJJar(url);
-	}
-
-	private static boolean isSurefireBooterJar(URL url) {
-		return url.getPath().contains("surefirebooter");
+		return isShortenedIntelliJJar(url);
 	}
 
 	private static boolean isShortenedIntelliJJar(URL url) {
@@ -245,11 +242,8 @@ final class ModifiedClassPathClassLoader extends URLClassLoader {
 		private final AntPathMatcher matcher = new AntPathMatcher();
 
 		private ClassPathEntryFilter(MergedAnnotation<ClassPathExclusions> annotation) {
-			this.exclusions = new ArrayList<>();
-			this.exclusions.add("log4j-*.jar");
-			if (annotation.isPresent()) {
-				this.exclusions.addAll(Arrays.asList(annotation.getStringArray(MergedAnnotation.VALUE)));
-			}
+			this.exclusions = annotation.getValue(MergedAnnotation.VALUE, String[].class).map(Arrays::asList)
+					.orElse(Collections.emptyList());
 		}
 
 		private boolean isExcluded(URL url) {

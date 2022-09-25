@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,23 +23,32 @@ import java.io.Reader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Task;
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.internal.tasks.userinput.UserInputHandler;
+import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskExecutionException;
 import org.gradle.api.tasks.options.Option;
 
 import org.springframework.boot.build.bom.BomExtension;
+import org.springframework.boot.build.bom.Library;
 import org.springframework.boot.build.bom.bomr.github.GitHub;
 import org.springframework.boot.build.bom.bomr.github.GitHubRepository;
+import org.springframework.boot.build.bom.bomr.github.Issue;
 import org.springframework.boot.build.bom.bomr.github.Milestone;
 import org.springframework.util.StringUtils;
 
@@ -50,13 +59,24 @@ import org.springframework.util.StringUtils;
  */
 public class UpgradeBom extends DefaultTask {
 
+	private Set<String> repositoryUrls;
+
 	private final BomExtension bom;
 
 	private String milestone;
 
+	private String libraries;
+
 	@Inject
 	public UpgradeBom(BomExtension bom) {
 		this.bom = bom;
+		this.repositoryUrls = new LinkedHashSet<>();
+		getProject().getRepositories().withType(MavenArtifactRepository.class, (repository) -> {
+			String repositoryUrl = repository.getUrl().toString();
+			if (!repositoryUrl.endsWith("snapshot")) {
+				this.repositoryUrls.add(repositoryUrl);
+			}
+		});
 	}
 
 	@Option(option = "milestone", description = "Milestone to which dependency upgrade issues should be assigned")
@@ -64,7 +84,24 @@ public class UpgradeBom extends DefaultTask {
 		this.milestone = milestone;
 	}
 
+	@Input
+	public String getMilestone() {
+		return this.milestone;
+	}
+
+	@Option(option = "libraries", description = "Regular expression that identifies the libraries to upgrade")
+	public void setLibraries(String libraries) {
+		this.libraries = libraries;
+	}
+
+	@Input
+	@org.gradle.api.tasks.Optional
+	public String getLibraries() {
+		return this.libraries;
+	}
+
 	@TaskAction
+	@SuppressWarnings("deprecation")
 	void upgradeDependencies() {
 		GitHubRepository repository = createGitHub().getRepository(this.bom.getUpgrade().getGitHub().getOrganization(),
 				this.bom.getUpgrade().getGitHub().getRepository());
@@ -77,19 +114,31 @@ public class UpgradeBom extends DefaultTask {
 					"Unknown label(s): " + StringUtils.collectionToCommaDelimitedString(unknownLabels));
 		}
 		Milestone milestone = determineMilestone(repository);
-		List<Upgrade> upgrades = new InteractiveUpgradeResolver(
-				new MavenMetadataVersionResolver(Arrays.asList("https://repo1.maven.org/maven2/")),
+		List<Issue> existingUpgradeIssues = repository.findIssues(issueLabels, milestone);
+		List<Upgrade> upgrades = new InteractiveUpgradeResolver(new MavenMetadataVersionResolver(this.repositoryUrls),
 				this.bom.getUpgrade().getPolicy(), getServices().get(UserInputHandler.class))
-						.resolveUpgrades(this.bom.getLibraries());
+						.resolveUpgrades(matchingLibraries(this.libraries), this.bom.getLibraries());
 		Path buildFile = getProject().getBuildFile().toPath();
 		Path gradleProperties = new File(getProject().getRootProject().getProjectDir(), "gradle.properties").toPath();
 		UpgradeApplicator upgradeApplicator = new UpgradeApplicator(buildFile, gradleProperties);
 		for (Upgrade upgrade : upgrades) {
 			String title = "Upgrade to " + upgrade.getLibrary().getName() + " " + upgrade.getVersion();
-			System.out.println(title);
+			Issue existingUpgradeIssue = findExistingUpgradeIssue(existingUpgradeIssues, upgrade);
+			if (existingUpgradeIssue != null) {
+				System.out.println(title + " (supersedes #" + existingUpgradeIssue.getNumber() + " "
+						+ existingUpgradeIssue.getTitle() + ")");
+			}
+			else {
+				System.out.println(title);
+			}
 			try {
 				Path modified = upgradeApplicator.apply(upgrade);
-				int issueNumber = repository.openIssue(title, issueLabels, milestone);
+				int issueNumber = repository.openIssue(title,
+						(existingUpgradeIssue != null) ? "Supersedes #" + existingUpgradeIssue.getNumber() : "",
+						issueLabels, milestone);
+				if (existingUpgradeIssue != null) {
+					existingUpgradeIssue.label(Arrays.asList("type: task", "status: superseded"));
+				}
 				if (new ProcessBuilder().command("git", "add", modified.toFile().getAbsolutePath()).start()
 						.waitFor() != 0) {
 					throw new IllegalStateException("git add failed");
@@ -106,6 +155,30 @@ public class UpgradeBom extends DefaultTask {
 				Thread.currentThread().interrupt();
 			}
 		}
+	}
+
+	private List<Library> matchingLibraries(String pattern) {
+		if (pattern == null) {
+			return this.bom.getLibraries();
+		}
+		Predicate<String> libraryPredicate = Pattern.compile(pattern).asPredicate();
+		List<Library> matchingLibraries = this.bom.getLibraries().stream()
+				.filter((library) -> libraryPredicate.test(library.getName())).collect(Collectors.toList());
+		if (matchingLibraries.isEmpty()) {
+			throw new InvalidUserDataException("No libraries matched '" + pattern + "'");
+		}
+		return matchingLibraries;
+	}
+
+	private Issue findExistingUpgradeIssue(List<Issue> existingUpgradeIssues, Upgrade upgrade) {
+		String toMatch = "Upgrade to " + upgrade.getLibrary().getName();
+		for (Issue existingUpgradeIssue : existingUpgradeIssues) {
+			if (existingUpgradeIssue.getTitle().substring(0, existingUpgradeIssue.getTitle().lastIndexOf(' '))
+					.equals(toMatch)) {
+				return existingUpgradeIssue;
+			}
+		}
+		return null;
 	}
 
 	private GitHub createGitHub() {

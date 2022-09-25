@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,12 @@
 package org.springframework.boot.autoconfigure.cassandra;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
+import org.springframework.core.io.Resource;
 
 /**
  * Configuration properties for Cassandra.
@@ -35,8 +33,13 @@ import org.springframework.boot.context.properties.DeprecatedConfigurationProper
  * @author Stephane Nicoll
  * @since 1.3.0
  */
-@ConfigurationProperties(prefix = "spring.data.cassandra")
+@ConfigurationProperties(prefix = "spring.cassandra")
 public class CassandraProperties {
+
+	/**
+	 * Location of the configuration file to use.
+	 */
+	private Resource config;
 
 	/**
 	 * Keyspace name to use.
@@ -52,7 +55,7 @@ public class CassandraProperties {
 	 * Cluster node addresses in the form 'host:port', or a simple 'host' to use the
 	 * configured port.
 	 */
-	private final List<String> contactPoints = new ArrayList<>(Collections.singleton("127.0.0.1:9042"));
+	private List<String> contactPoints;
 
 	/**
 	 * Port to use if a contact point does not specify one.
@@ -78,7 +81,7 @@ public class CassandraProperties {
 	/**
 	 * Compression supported by the Cassandra binary protocol.
 	 */
-	private Compression compression = Compression.NONE;
+	private Compression compression;
 
 	/**
 	 * Schema action to take at startup.
@@ -110,6 +113,14 @@ public class CassandraProperties {
 	 */
 	private final Controlconnection controlconnection = new Controlconnection();
 
+	public Resource getConfig() {
+		return this.config;
+	}
+
+	public void setConfig(Resource config) {
+		this.config = config;
+	}
+
 	public String getKeyspaceName() {
 		return this.keyspaceName;
 	}
@@ -126,19 +137,12 @@ public class CassandraProperties {
 		this.sessionName = sessionName;
 	}
 
-	@Deprecated
-	@DeprecatedConfigurationProperty(replacement = "spring.data.cassandra.session-name")
-	public String getClusterName() {
-		return getSessionName();
-	}
-
-	@Deprecated
-	public void setClusterName(String clusterName) {
-		setSessionName(clusterName);
-	}
-
 	public List<String> getContactPoints() {
 		return this.contactPoints;
+	}
+
+	public void setContactPoints(List<String> contactPoints) {
+		this.contactPoints = contactPoints;
 	}
 
 	public int getPort() {
@@ -181,61 +185,6 @@ public class CassandraProperties {
 		this.compression = compression;
 	}
 
-	@Deprecated
-	@DeprecatedConfigurationProperty(replacement = "spring.data.cassandra.request.consistency")
-	public DefaultConsistencyLevel getConsistencyLevel() {
-		return getRequest().getConsistency();
-	}
-
-	@Deprecated
-	public void setConsistencyLevel(DefaultConsistencyLevel consistency) {
-		getRequest().setConsistency(consistency);
-	}
-
-	@Deprecated
-	@DeprecatedConfigurationProperty(replacement = "spring.data.cassandra.request.serial-consistency")
-	public DefaultConsistencyLevel getSerialConsistencyLevel() {
-		return getRequest().getSerialConsistency();
-	}
-
-	@Deprecated
-	public void setSerialConsistencyLevel(DefaultConsistencyLevel serialConsistency) {
-		getRequest().setSerialConsistency(serialConsistency);
-	}
-
-	@Deprecated
-	@DeprecatedConfigurationProperty(replacement = "spring.data.cassandra.request.page-size")
-	public int getFetchSize() {
-		return getRequest().getPageSize();
-	}
-
-	@Deprecated
-	public void setFetchSize(int fetchSize) {
-		getRequest().setPageSize(fetchSize);
-	}
-
-	@Deprecated
-	@DeprecatedConfigurationProperty(replacement = "spring.data.cassandra.connection.init-query-timeout")
-	public Duration getConnectTimeout() {
-		return getConnection().getInitQueryTimeout();
-	}
-
-	@Deprecated
-	public void setConnectTimeout(Duration connectTimeout) {
-		getConnection().setInitQueryTimeout(connectTimeout);
-	}
-
-	@Deprecated
-	@DeprecatedConfigurationProperty(replacement = "spring.data.cassandra.request.timeout")
-	public Duration getReadTimeout() {
-		return getRequest().getTimeout();
-	}
-
-	@Deprecated
-	public void setReadTimeout(Duration readTimeout) {
-		getRequest().setTimeout(readTimeout);
-	}
-
 	public boolean isSsl() {
 		return this.ssl;
 	}
@@ -273,13 +222,13 @@ public class CassandraProperties {
 		/**
 		 * Timeout to use when establishing driver connections.
 		 */
-		private Duration connectTimeout = Duration.ofSeconds(5);
+		private Duration connectTimeout;
 
 		/**
 		 * Timeout to use for internal queries that run as part of the initialization
 		 * process, just after a connection is opened.
 		 */
-		private Duration initQueryTimeout = Duration.ofMillis(500);
+		private Duration initQueryTimeout;
 
 		public Duration getConnectTimeout() {
 			return this.connectTimeout;
@@ -304,7 +253,7 @@ public class CassandraProperties {
 		/**
 		 * How long the driver waits for a request to complete.
 		 */
-		private Duration timeout = Duration.ofSeconds(2);
+		private Duration timeout;
 
 		/**
 		 * Queries consistency level.
@@ -317,9 +266,9 @@ public class CassandraProperties {
 		private DefaultConsistencyLevel serialConsistency;
 
 		/**
-		 * How many rows will be retrieved simultaneously in a single network roundtrip.
+		 * How many rows will be retrieved simultaneously in a single network round-trip.
 		 */
-		private int pageSize = 5000;
+		private Integer pageSize;
 
 		private final Throttler throttler = new Throttler();
 
@@ -347,7 +296,7 @@ public class CassandraProperties {
 			this.serialConsistency = serialConsistency;
 		}
 
-		public int getPageSize() {
+		public Integer getPageSize() {
 			return this.pageSize;
 		}
 
@@ -369,13 +318,13 @@ public class CassandraProperties {
 		/**
 		 * Idle timeout before an idle connection is removed.
 		 */
-		private Duration idleTimeout = Duration.ofSeconds(120);
+		private Duration idleTimeout;
 
 		/**
 		 * Heartbeat interval after which a message is sent on an idle connection to make
 		 * sure it's still alive.
 		 */
-		private Duration heartbeatInterval = Duration.ofSeconds(30);
+		private Duration heartbeatInterval;
 
 		public Duration getIdleTimeout() {
 			return this.idleTimeout;
@@ -400,7 +349,7 @@ public class CassandraProperties {
 		/**
 		 * Timeout to use for control queries.
 		 */
-		private Duration timeout = Duration.ofSeconds(5);
+		private Duration timeout;
 
 		public Duration getTimeout() {
 			return this.timeout;
@@ -417,30 +366,30 @@ public class CassandraProperties {
 		/**
 		 * Request throttling type.
 		 */
-		private ThrottlerType type = ThrottlerType.NONE;
+		private ThrottlerType type;
 
 		/**
 		 * Maximum number of requests that can be enqueued when the throttling threshold
 		 * is exceeded.
 		 */
-		private int maxQueueSize = 10000;
+		private Integer maxQueueSize;
 
 		/**
 		 * Maximum number of requests that are allowed to execute in parallel.
 		 */
-		private int maxConcurrentRequests = 10000;
+		private Integer maxConcurrentRequests;
 
 		/**
 		 * Maximum allowed request rate.
 		 */
-		private int maxRequestsPerSecond = 10000;
+		private Integer maxRequestsPerSecond;
 
 		/**
 		 * How often the throttler attempts to dequeue requests. Set this high enough that
 		 * each attempt will process multiple entries in the queue, but not delay requests
 		 * too much.
 		 */
-		private Duration drainInterval = Duration.ofMillis(10);
+		private Duration drainInterval;
 
 		public ThrottlerType getType() {
 			return this.type;
@@ -450,7 +399,7 @@ public class CassandraProperties {
 			this.type = type;
 		}
 
-		public int getMaxQueueSize() {
+		public Integer getMaxQueueSize() {
 			return this.maxQueueSize;
 		}
 
@@ -458,7 +407,7 @@ public class CassandraProperties {
 			this.maxQueueSize = maxQueueSize;
 		}
 
-		public int getMaxConcurrentRequests() {
+		public Integer getMaxConcurrentRequests() {
 			return this.maxConcurrentRequests;
 		}
 
@@ -466,7 +415,7 @@ public class CassandraProperties {
 			this.maxConcurrentRequests = maxConcurrentRequests;
 		}
 
-		public int getMaxRequestsPerSecond() {
+		public Integer getMaxRequestsPerSecond() {
 			return this.maxRequestsPerSecond;
 		}
 

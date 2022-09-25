@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@ package org.springframework.boot.actuate.autoconfigure.metrics.orm.jpa;
 import java.util.Collections;
 import java.util.Map;
 
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.PersistenceException;
-
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.binder.jpa.HibernateMetrics;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceException;
 import org.hibernate.SessionFactory;
+import org.hibernate.stat.HibernateMetrics;
 
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration;
@@ -48,7 +47,7 @@ import org.springframework.util.StringUtils;
 @Configuration(proxyBeanMethods = false)
 @AutoConfigureAfter({ MetricsAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
 		SimpleMetricsExportAutoConfiguration.class })
-@ConditionalOnClass({ EntityManagerFactory.class, SessionFactory.class, MeterRegistry.class })
+@ConditionalOnClass({ EntityManagerFactory.class, SessionFactory.class, HibernateMetrics.class, MeterRegistry.class })
 @ConditionalOnBean({ EntityManagerFactory.class, MeterRegistry.class })
 public class HibernateMetricsAutoConfiguration implements SmartInitializingSingleton {
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ public class ExplodedArchive implements Archive {
 		return new EntryIterator(this.root, this.recursive, null, null);
 	}
 
-	protected Archive getNestedArchive(Entry entry) throws IOException {
+	protected Archive getNestedArchive(Entry entry) {
 		File file = ((FileEntry) entry).getFile();
 		return (file.isDirectory() ? new ExplodedArchive(file) : new SimpleJarFileArchive((FileEntry) entry));
 	}

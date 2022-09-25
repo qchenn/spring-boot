@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,8 +56,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link TestRestTemplate}.
@@ -125,7 +125,7 @@ class TestRestTemplateTests {
 	}
 
 	@Test
-	void authenticated() throws Exception {
+	void authenticated() {
 		TestRestTemplate restTemplate = new TestRestTemplate("user", "password");
 		assertBasicAuthorizationCredentials(restTemplate, "user", "password");
 	}
@@ -150,7 +150,7 @@ class TestRestTemplateTests {
 		ReflectionUtils.doWithMethods(RestOperations.class, new MethodCallback() {
 
 			@Override
-			public void doWith(Method method) throws IllegalArgumentException {
+			public void doWith(Method method) {
 				Method equivalent = ReflectionUtils.findMethod(TestRestTemplate.class, method.getName(),
 						method.getParameterTypes());
 				assertThat(equivalent).as("Method %s not found", method).isNotNull();
@@ -200,7 +200,7 @@ class TestRestTemplateTests {
 	}
 
 	@Test
-	void withBasicAuthAddsBasicAuthWhenNotAlreadyPresent() throws Exception {
+	void withBasicAuthAddsBasicAuthWhenNotAlreadyPresent() {
 		TestRestTemplate original = new TestRestTemplate();
 		TestRestTemplate basicAuth = original.withBasicAuth("user", "password");
 		assertThat(getConverterClasses(original)).containsExactlyElementsOf(getConverterClasses(basicAuth));
@@ -210,7 +210,7 @@ class TestRestTemplateTests {
 	}
 
 	@Test
-	void withBasicAuthReplacesBasicAuthWhenAlreadyPresent() throws Exception {
+	void withBasicAuthReplacesBasicAuthWhenAlreadyPresent() {
 		TestRestTemplate original = new TestRestTemplate("foo", "bar").withBasicAuth("replace", "replace");
 		TestRestTemplate basicAuth = original.withBasicAuth("user", "password");
 		assertThat(getConverterClasses(basicAuth)).containsExactlyElementsOf(getConverterClasses(original));
@@ -231,6 +231,36 @@ class TestRestTemplateTests {
 		TestRestTemplate basicAuthTemplate = originalTemplate.withBasicAuth("user", "password");
 		assertThat(basicAuthTemplate.getRestTemplate().getErrorHandler()).isInstanceOf(
 				Class.forName("org.springframework.boot.test.web.client.TestRestTemplate$NoOpResponseErrorHandler"));
+	}
+
+	@Test
+	void exchangeWithRelativeTemplatedUrlRequestEntity() throws Exception {
+		RequestEntity<Void> entity = RequestEntity.get("/a/b/c.{ext}", "txt").build();
+		TestRestTemplate template = new TestRestTemplate();
+		ClientHttpRequestFactory requestFactory = mock(ClientHttpRequestFactory.class);
+		MockClientHttpRequest request = new MockClientHttpRequest();
+		request.setResponse(new MockClientHttpResponse(new byte[0], HttpStatus.OK));
+		URI absoluteUri = URI.create("http://localhost:8080/a/b/c.txt");
+		given(requestFactory.createRequest(eq(absoluteUri), eq(HttpMethod.GET))).willReturn(request);
+		template.getRestTemplate().setRequestFactory(requestFactory);
+		LocalHostUriTemplateHandler uriTemplateHandler = new LocalHostUriTemplateHandler(new MockEnvironment());
+		template.setUriTemplateHandler(uriTemplateHandler);
+		template.exchange(entity, String.class);
+		then(requestFactory).should().createRequest(eq(absoluteUri), eq(HttpMethod.GET));
+	}
+
+	@Test
+	void exchangeWithAbsoluteTemplatedUrlRequestEntity() throws Exception {
+		RequestEntity<Void> entity = RequestEntity.get("https://api.example.com/a/b/c.{ext}", "txt").build();
+		TestRestTemplate template = new TestRestTemplate();
+		ClientHttpRequestFactory requestFactory = mock(ClientHttpRequestFactory.class);
+		MockClientHttpRequest request = new MockClientHttpRequest();
+		request.setResponse(new MockClientHttpResponse(new byte[0], HttpStatus.OK));
+		URI absoluteUri = URI.create("https://api.example.com/a/b/c.txt");
+		given(requestFactory.createRequest(eq(absoluteUri), eq(HttpMethod.GET))).willReturn(request);
+		template.getRestTemplate().setRequestFactory(requestFactory);
+		template.exchange(entity, String.class);
+		then(requestFactory).should().createRequest(eq(absoluteUri), eq(HttpMethod.GET));
 	}
 
 	@Test
@@ -332,11 +362,11 @@ class TestRestTemplateTests {
 		LocalHostUriTemplateHandler uriTemplateHandler = new LocalHostUriTemplateHandler(new MockEnvironment());
 		template.setUriTemplateHandler(uriTemplateHandler);
 		callback.doWithTestRestTemplate(template, URI.create("/a/b/c.txt?param=%7Bsomething%7D"));
-		verify(requestFactory).createRequest(eq(absoluteUri), any(HttpMethod.class));
+		then(requestFactory).should().createRequest(eq(absoluteUri), any(HttpMethod.class));
 	}
 
 	private void assertBasicAuthorizationCredentials(TestRestTemplate testRestTemplate, String username,
-			String password) throws Exception {
+			String password) {
 		ClientHttpRequest request = ReflectionTestUtils.invokeMethod(testRestTemplate.getRestTemplate(),
 				"createRequest", URI.create("http://localhost"), HttpMethod.POST);
 		if (username == null) {

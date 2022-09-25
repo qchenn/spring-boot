@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -423,7 +423,20 @@ class ConfigurationPropertyNameTests {
 	@Test
 	void appendWhenElementNameIsNullShouldReturnName() {
 		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo");
-		assertThat((Object) name.append(null)).isSameAs(name);
+		assertThat((Object) name.append((String) null)).isSameAs(name);
+	}
+
+	@Test
+	void appendConfigurationPropertyNameShouldReturnAppendedName() {
+		ConfigurationPropertyName n1 = ConfigurationPropertyName.of("spring.boot");
+		ConfigurationPropertyName n2 = ConfigurationPropertyName.of("tests.code");
+		assertThat(n1.append(n2)).hasToString("spring.boot.tests.code");
+	}
+
+	@Test
+	void appendConfigurationPropertyNameWhenNullShouldReturnName() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo");
+		assertThat((Object) name.append((ConfigurationPropertyName) null)).isSameAs(name);
 	}
 
 	@Test
@@ -463,6 +476,37 @@ class ConfigurationPropertyNameTests {
 	void chopWhenEqualToSizeShouldReturnExisting() {
 		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo.bar.baz");
 		assertThat(name.chop(3)).isEqualTo(name);
+	}
+
+	@Test
+	void subNameWhenOffsetLessThanSizeShouldReturnSubName() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo.bar.baz");
+		assertThat(name.subName(1)).hasToString("bar.baz");
+		assertThat(name.subName(2)).hasToString("baz");
+	}
+
+	@Test
+	void subNameWhenOffsetZeroShouldReturnName() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo.bar.baz");
+		assertThat(name.subName(0)).isSameAs(name);
+	}
+
+	@Test
+	void subNameWhenOffsetEqualToSizeShouldReturnEmpty() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo.bar.baz");
+		assertThat(name.subName(3)).isSameAs(ConfigurationPropertyName.EMPTY);
+	}
+
+	@Test
+	void subNameWhenOffsetMoreThanSizeShouldReturnEmpty() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo.bar.baz");
+		assertThatExceptionOfType(IndexOutOfBoundsException.class).isThrownBy(() -> name.subName(4));
+	}
+
+	@Test
+	void subNameWhenOffsetNegativeShouldThrowException() {
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("foo.bar.baz");
+		assertThatExceptionOfType(IndexOutOfBoundsException.class).isThrownBy(() -> name.subName(-1));
 	}
 
 	@Test
@@ -543,9 +587,9 @@ class ConfigurationPropertyNameTests {
 
 	@Test
 	void compareDifferentLengthsShouldSortNames() {
-		ConfigurationPropertyName name = ConfigurationPropertyName.of("spring.resources.chain.strategy.content");
+		ConfigurationPropertyName name = ConfigurationPropertyName.of("spring.web.resources.chain.strategy.content");
 		ConfigurationPropertyName other = ConfigurationPropertyName
-				.of("spring.resources.chain.strategy.content.enabled");
+				.of("spring.web.resources.chain.strategy.content.enabled");
 		assertThat(name.compareTo(other)).isLessThan(0);
 	}
 
@@ -642,6 +686,15 @@ class ConfigurationPropertyNameTests {
 	}
 
 	@Test
+	void equalsWhenAdaptedNameMatchesDueToRemovalOfTrailingCharacters() {
+		// gh-30317
+		ConfigurationPropertyName name1 = ConfigurationPropertyName.of("example.demo");
+		ConfigurationPropertyName name2 = ConfigurationPropertyName.adapt("example.demo$$", '.');
+		assertThat(name1).isEqualTo(name2);
+		assertThat(name2).isEqualTo(name1);
+	}
+
+	@Test
 	void isValidWhenValidShouldReturnTrue() {
 		assertThat(ConfigurationPropertyName.isValid("")).isTrue();
 		assertThat(ConfigurationPropertyName.isValid("foo")).isTrue();
@@ -665,17 +718,17 @@ class ConfigurationPropertyNameTests {
 	void hashCodeIsStored() {
 		ConfigurationPropertyName name = ConfigurationPropertyName.of("hash.code");
 		int hashCode = name.hashCode();
-		// hasFieldOrPropertyWithValue would lookup for `hashCode()`.
+		// hasFieldOrPropertyWithValue would look up for hashCode()
 		assertThat(ReflectionTestUtils.getField(name, "hashCode")).isEqualTo(hashCode);
 	}
 
 	@Test
-	void hasIndexedElementWhenHasIndexedElementReturnsTrue() throws Exception {
+	void hasIndexedElementWhenHasIndexedElementReturnsTrue() {
 		assertThat(ConfigurationPropertyName.of("foo[bar]").hasIndexedElement()).isTrue();
 	}
 
 	@Test
-	void hasIndexedElementWhenHasNoIndexedElementReturnsFalse() throws Exception {
+	void hasIndexedElementWhenHasNoIndexedElementReturnsFalse() {
 		assertThat(ConfigurationPropertyName.of("foo.bar").hasIndexedElement()).isFalse();
 	}
 

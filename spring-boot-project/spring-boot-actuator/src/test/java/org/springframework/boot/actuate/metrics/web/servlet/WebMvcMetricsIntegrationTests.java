@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.MockClock;
 import io.micrometer.core.instrument.simple.SimpleConfig;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +45,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.util.NestedServletException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -85,8 +85,8 @@ class WebMvcMetricsIntegrationTests {
 	}
 
 	@Test
-	void rethrownExceptionIsRecordedInMetricTag() throws Exception {
-		assertThatExceptionOfType(NestedServletException.class)
+	void rethrownExceptionIsRecordedInMetricTag() {
+		assertThatExceptionOfType(ServletException.class)
 				.isThrownBy(() -> this.mvc.perform(get("/api/rethrownError")).andReturn());
 		assertThat(this.registry.get("http.server.requests").tags("exception", "Exception2", "status", "500").timer()
 				.count()).isEqualTo(1L);

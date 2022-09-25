@@ -6,12 +6,12 @@ plugins {
 	id("org.springframework.boot") version "{gradle-project-version}"
 }
 
-tasks.getByName<BootJar>("bootJar") {
+tasks.named<BootJar>("bootJar") {
 	mainClass.set("com.example.ExampleApplication")
 }
 
 // tag::docker-auth-user[]
-tasks.getByName<BootBuildImage>("bootBuildImage") {
+tasks.named<BootBuildImage>("bootBuildImage") {
 	docker {
 		builderRegistry {
 			username = "user"
@@ -22,3 +22,12 @@ tasks.getByName<BootBuildImage>("bootBuildImage") {
 	}
 }
 // end::docker-auth-user[]
+
+tasks.register("bootBuildImageDocker") {
+	doFirst {
+		println("username=${tasks.getByName<BootBuildImage>("bootBuildImage").docker.builderRegistry.username}")
+		println("password=${tasks.getByName<BootBuildImage>("bootBuildImage").docker.builderRegistry.password}")
+		println("url=${tasks.getByName<BootBuildImage>("bootBuildImage").docker.builderRegistry.url}")
+		println("email=${tasks.getByName<BootBuildImage>("bootBuildImage").docker.builderRegistry.email}")
+	}
+}

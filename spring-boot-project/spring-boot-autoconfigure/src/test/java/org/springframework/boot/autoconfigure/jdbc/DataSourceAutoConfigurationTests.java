@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,16 +39,15 @@ import org.apache.commons.dbcp2.BasicDataSource;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jdbc.DatabaseDriver;
 import org.springframework.boot.jdbc.EmbeddedDatabaseConnection;
+import org.springframework.boot.jdbc.init.DataSourceScriptDatabaseInitializer;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.util.StringUtils;
@@ -66,8 +65,7 @@ class DataSourceAutoConfigurationTests {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 			.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class))
-			.withPropertyValues("spring.datasource.initialization-mode=never",
-					"spring.datasource.url:jdbc:hsqldb:mem:testdb-" + new Random().nextInt());
+			.withPropertyValues("spring.datasource.url:jdbc:hsqldb:mem:testdb-" + new Random().nextInt());
 
 	@Test
 	void testDefaultDataSourceExists() {
@@ -235,16 +233,14 @@ class DataSourceAutoConfigurationTests {
 	}
 
 	@Test
-	void testDataSourceIsInitializedEarly() {
-		this.contextRunner.withUserConfiguration(TestInitializedDataSourceConfiguration.class)
-				.withPropertyValues("spring.datasource.initialization-mode=always")
-				.run((context) -> assertThat(context.getBean(TestInitializedDataSourceConfiguration.class).called)
-						.isTrue());
+	void whenNoInitializationRelatedSpringDataSourcePropertiesAreConfiguredThenInitializationBacksOff() {
+		this.contextRunner
+				.run((context) -> assertThat(context).doesNotHaveBean(DataSourceScriptDatabaseInitializer.class));
 	}
 
 	private static Function<ApplicationContextRunner, ApplicationContextRunner> hideConnectionPools() {
 		return (runner) -> runner.withClassLoader(new FilteredClassLoader("org.apache.tomcat", "com.zaxxer.hikari",
-				"org.apache.commons.dbcp2", "oracle.ucp.jdbc"));
+				"org.apache.commons.dbcp2", "oracle.ucp.jdbc", "com.mchange"));
 	}
 
 	private <T extends DataSource> void assertDataSource(Class<T> expectedType, List<String> hiddenPackages,
@@ -269,21 +265,6 @@ class DataSourceAutoConfigurationTests {
 			this.pool.setUrl("jdbc:hsqldb:mem:overridedb");
 			this.pool.setUsername("sa");
 			return this.pool;
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	static class TestInitializedDataSourceConfiguration {
-
-		private boolean called;
-
-		@Autowired
-		void validateDataSourceIsInitialized(DataSource dataSource) {
-			// Inject the datasource to validate it is initialized at the injection point
-			JdbcTemplate template = new JdbcTemplate(dataSource);
-			assertThat(template.queryForObject("SELECT COUNT(*) from BAR", Integer.class)).isEqualTo(1);
-			this.called = true;
 		}
 
 	}

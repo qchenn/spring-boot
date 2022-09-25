@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ public final class WebClientExchangeTags {
 
 	private static final Pattern PATTERN_BEFORE_PATH = Pattern.compile("^https?://[^/]+/");
 
-	private static final Tag CLIENT_NAME_NONE = Tag.of("clientName", "none");
+	private static final Tag CLIENT_NAME_NONE = Tag.of("client.name", "none");
 
 	private WebClientExchangeTags() {
 	}
@@ -86,7 +86,7 @@ public final class WebClientExchangeTags {
 	 */
 	public static Tag status(ClientResponse response, Throwable throwable) {
 		if (response != null) {
-			return Tag.of("status", String.valueOf(response.rawStatusCode()));
+			return Tag.of("status", String.valueOf(response.statusCode().value()));
 		}
 		if (throwable != null) {
 			return (throwable instanceof IOException) ? IO_ERROR : CLIENT_ERROR;
@@ -95,53 +95,29 @@ public final class WebClientExchangeTags {
 	}
 
 	/**
-	 * Creates a {@code status} {@code Tag} derived from the
-	 * {@link ClientResponse#statusCode()} of the given {@code response}.
-	 * @param response the response
-	 * @return the status tag
-	 * @deprecated since 2.3.0 in favor of {@link #status(ClientResponse, Throwable)}
-	 */
-	@Deprecated
-	public static Tag status(ClientResponse response) {
-		return Tag.of("status", String.valueOf(response.rawStatusCode()));
-	}
-
-	/**
-	 * Creates a {@code status} {@code Tag} derived from the exception thrown by the
-	 * client.
-	 * @param throwable the exception
-	 * @return the status tag
-	 * @deprecated since 2.3.0 in favor of {@link #status(ClientResponse, Throwable)}
-	 */
-	@Deprecated
-	public static Tag status(Throwable throwable) {
-		return (throwable instanceof IOException) ? IO_ERROR : CLIENT_ERROR;
-	}
-
-	/**
-	 * Create a {@code clientName} {@code Tag} derived from the
+	 * Create a {@code client.name} {@code Tag} derived from the
 	 * {@link java.net.URI#getHost host} of the {@link ClientRequest#url() URL} of the
 	 * given {@code request}.
 	 * @param request the request
-	 * @return the clientName tag
+	 * @return the client.name tag
 	 */
 	public static Tag clientName(ClientRequest request) {
 		String host = request.url().getHost();
 		if (host == null) {
 			return CLIENT_NAME_NONE;
 		}
-		return Tag.of("clientName", host);
+		return Tag.of("client.name", host);
 	}
 
 	/**
 	 * Creates an {@code outcome} {@code Tag} derived from the
-	 * {@link ClientResponse#rawStatusCode() status} of the given {@code response}.
+	 * {@link ClientResponse#statusCode() status} of the given {@code response}.
 	 * @param response the response
 	 * @return the outcome tag
 	 * @since 2.2.0
 	 */
 	public static Tag outcome(ClientResponse response) {
-		Outcome outcome = (response != null) ? Outcome.forStatus(response.rawStatusCode()) : Outcome.UNKNOWN;
+		Outcome outcome = (response != null) ? Outcome.forStatus(response.statusCode().value()) : Outcome.UNKNOWN;
 		return outcome.asTag();
 	}
 

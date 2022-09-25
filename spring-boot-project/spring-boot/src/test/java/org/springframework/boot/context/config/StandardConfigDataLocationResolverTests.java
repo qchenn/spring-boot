@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.env.PropertiesPropertySourceLoader;
-import org.springframework.boot.logging.DeferredLog;
+import org.springframework.boot.logging.DeferredLogs;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -34,6 +34,7 @@ import org.springframework.mock.env.MockEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -43,7 +44,7 @@ import static org.mockito.Mockito.mock;
  * @author Madhura Bhave
  * @author Phillip Webb
  */
-public class StandardConfigDataLocationResolverTests {
+class StandardConfigDataLocationResolverTests {
 
 	private StandardConfigDataLocationResolver resolver;
 
@@ -59,7 +60,7 @@ public class StandardConfigDataLocationResolverTests {
 	void setup() {
 		this.environment = new MockEnvironment();
 		this.environmentBinder = Binder.get(this.environment);
-		this.resolver = new StandardConfigDataLocationResolver(new DeferredLog(), this.environmentBinder,
+		this.resolver = new StandardConfigDataLocationResolver(new DeferredLogs(), this.environmentBinder,
 				this.resourceLoader);
 	}
 
@@ -114,8 +115,8 @@ public class StandardConfigDataLocationResolverTests {
 	void createWhenConfigNameHasWildcardThrowsException() {
 		this.environment.setProperty("spring.config.name", "*/application");
 		assertThatIllegalStateException()
-				.isThrownBy(
-						() -> new StandardConfigDataLocationResolver(null, this.environmentBinder, this.resourceLoader))
+				.isThrownBy(() -> new StandardConfigDataLocationResolver(new DeferredLogs(), this.environmentBinder,
+						this.resourceLoader))
 				.withMessageStartingWith("Config name '").withMessageEndingWith("' cannot contain '*'");
 	}
 
@@ -130,7 +131,8 @@ public class StandardConfigDataLocationResolverTests {
 	void resolveWhenLocationIsWildcardDirectoriesRestrictsToOneLevelDeep() {
 		ConfigDataLocation location = ConfigDataLocation.of("file:src/test/resources/config/*/");
 		this.environment.setProperty("spring.config.name", "testproperties");
-		this.resolver = new StandardConfigDataLocationResolver(null, this.environmentBinder, this.resourceLoader);
+		this.resolver = new StandardConfigDataLocationResolver(new DeferredLogs(), this.environmentBinder,
+				this.resourceLoader);
 		List<StandardConfigDataResource> locations = this.resolver.resolve(this.context, location);
 		assertThat(locations.size()).isEqualTo(3);
 		assertThat(locations).extracting(Object::toString)
@@ -143,12 +145,19 @@ public class StandardConfigDataLocationResolverTests {
 	void resolveWhenLocationIsWildcardDirectoriesSortsAlphabeticallyBasedOnAbsolutePath() {
 		ConfigDataLocation location = ConfigDataLocation.of("file:src/test/resources/config/*/");
 		this.environment.setProperty("spring.config.name", "testproperties");
-		this.resolver = new StandardConfigDataLocationResolver(null, this.environmentBinder, this.resourceLoader);
+		this.resolver = new StandardConfigDataLocationResolver(new DeferredLogs(), this.environmentBinder,
+				this.resourceLoader);
 		List<StandardConfigDataResource> locations = this.resolver.resolve(this.context, location);
 		assertThat(locations).extracting(Object::toString).containsExactly(
 				filePath("src", "test", "resources", "config", "0-empty", "testproperties.properties"),
 				filePath("src", "test", "resources", "config", "1-first", "testproperties.properties"),
 				filePath("src", "test", "resources", "config", "2-second", "testproperties.properties"));
+	}
+
+	@Test
+	void resolveWhenLocationIsWildcardAndMatchingFilePresentShouldNotFail() {
+		ConfigDataLocation location = ConfigDataLocation.of("optional:file:src/test/resources/a-file/*/");
+		assertThatNoException().isThrownBy(() -> this.resolver.resolve(this.context, location));
 	}
 
 	@Test
@@ -168,7 +177,7 @@ public class StandardConfigDataLocationResolverTests {
 	void resolveWhenLocationIsRelativeAndFileResolves() {
 		this.environment.setProperty("spring.config.name", "other");
 		ConfigDataLocation location = ConfigDataLocation.of("other.properties");
-		this.resolver = new StandardConfigDataLocationResolver(new DeferredLog(), this.environmentBinder,
+		this.resolver = new StandardConfigDataLocationResolver(new DeferredLogs(), this.environmentBinder,
 				this.resourceLoader);
 		StandardConfigDataReference parentReference = new StandardConfigDataReference(
 				ConfigDataLocation.of("classpath:configdata/properties/application.properties"), null,
@@ -187,7 +196,7 @@ public class StandardConfigDataLocationResolverTests {
 	void resolveWhenLocationIsRelativeAndDirectoryResolves() {
 		this.environment.setProperty("spring.config.name", "testproperties");
 		ConfigDataLocation location = ConfigDataLocation.of("nested/3-third/");
-		this.resolver = new StandardConfigDataLocationResolver(new DeferredLog(), this.environmentBinder,
+		this.resolver = new StandardConfigDataLocationResolver(new DeferredLogs(), this.environmentBinder,
 				this.resourceLoader);
 		StandardConfigDataReference parentReference = new StandardConfigDataReference(
 				ConfigDataLocation.of("optional:classpath:configdata/"), null, "classpath:config/specific", null,

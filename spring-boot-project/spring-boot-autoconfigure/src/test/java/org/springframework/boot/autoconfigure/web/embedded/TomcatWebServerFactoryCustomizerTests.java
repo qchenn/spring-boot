@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.apache.catalina.valves.RemoteIpValve;
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.ajp.AbstractAjpProtocol;
 import org.apache.coyote.http11.AbstractHttp11Protocol;
+import org.apache.coyote.http2.Http2Protocol;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Andrew McGhie
  * @author Rafiullah Hamedy
  * @author Victor Mandujano
+ * @author Parviz Rozikov
  */
 class TomcatWebServerFactoryCustomizerTests {
 
@@ -95,6 +97,45 @@ class TomcatWebServerFactoryCustomizerTests {
 		customizeAndRunServer((server) -> assertThat(
 				((AbstractProtocol<?>) server.getTomcat().getConnector().getProtocolHandler()).getProcessorCache())
 						.isEqualTo(100));
+	}
+
+	@Test
+	void customKeepAliveTimeout() {
+		bind("server.tomcat.keep-alive-timeout=30ms");
+		customizeAndRunServer((server) -> assertThat(
+				((AbstractProtocol<?>) server.getTomcat().getConnector().getProtocolHandler()).getKeepAliveTimeout())
+						.isEqualTo(30));
+	}
+
+	@Test
+	void defaultKeepAliveTimeoutWithHttp2() {
+		bind("server.http2.enabled=true");
+		customizeAndRunServer((server) -> assertThat(
+				((Http2Protocol) server.getTomcat().getConnector().findUpgradeProtocols()[0]).getKeepAliveTimeout())
+						.isEqualTo(20000L));
+	}
+
+	@Test
+	void customKeepAliveTimeoutWithHttp2() {
+		bind("server.tomcat.keep-alive-timeout=30s", "server.http2.enabled=true");
+		customizeAndRunServer((server) -> assertThat(
+				((Http2Protocol) server.getTomcat().getConnector().findUpgradeProtocols()[0]).getKeepAliveTimeout())
+						.isEqualTo(30000L));
+	}
+
+	@Test
+	void customMaxKeepAliveRequests() {
+		bind("server.tomcat.max-keep-alive-requests=-1");
+		customizeAndRunServer((server) -> assertThat(
+				((AbstractHttp11Protocol<?>) server.getTomcat().getConnector().getProtocolHandler())
+						.getMaxKeepAliveRequests()).isEqualTo(-1));
+	}
+
+	@Test
+	void defaultMaxKeepAliveRequests() {
+		customizeAndRunServer((server) -> assertThat(
+				((AbstractHttp11Protocol<?>) server.getTomcat().getConnector().getProtocolHandler())
+						.getMaxKeepAliveRequests()).isEqualTo(100));
 	}
 
 	@Test
@@ -142,6 +183,19 @@ class TomcatWebServerFactoryCustomizerTests {
 	}
 
 	@Test
+	void customMaxHttpHeaderSizeWithHttp2() {
+		bind("server.max-http-header-size=1KB", "server.http2.enabled=true");
+		customizeAndRunServer((server) -> {
+			AbstractHttp11Protocol<?> protocolHandler = (AbstractHttp11Protocol<?>) server.getTomcat().getConnector()
+					.getProtocolHandler();
+			long expectedSize = DataSize.ofKilobytes(1).toBytes();
+			assertThat(protocolHandler.getMaxHttpHeaderSize()).isEqualTo(expectedSize);
+			assertThat(((Http2Protocol) protocolHandler.getUpgradeProtocol("h2c")).getMaxHeaderSize())
+					.isEqualTo(expectedSize);
+		});
+	}
+
+	@Test
 	void customMaxHttpHeaderSizeIgnoredIfNegative() {
 		bind("server.max-http-header-size=-1");
 		customizeAndRunServer((server) -> assertThat(
@@ -172,7 +226,8 @@ class TomcatWebServerFactoryCustomizerTests {
 				"server.tomcat.remoteip.internal-proxies=192.168.0.1",
 				"server.tomcat.remoteip.host-header=x-my-forward-host",
 				"server.tomcat.remoteip.port-header=x-my-forward-port",
-				"server.tomcat.remoteip.protocol-header-https-value=On");
+				"server.tomcat.remoteip.protocol-header-https-value=On",
+				"server.tomcat.remoteip.trusted-proxies=proxy1|proxy2");
 		TomcatServletWebServerFactory factory = customizeAndGetFactory();
 		assertThat(factory.getEngineValves()).hasSize(1);
 		Valve valve = factory.getEngineValves().iterator().next();
@@ -184,26 +239,7 @@ class TomcatWebServerFactoryCustomizerTests {
 		assertThat(remoteIpValve.getHostHeader()).isEqualTo("x-my-forward-host");
 		assertThat(remoteIpValve.getPortHeader()).isEqualTo("x-my-forward-port");
 		assertThat(remoteIpValve.getInternalProxies()).isEqualTo("192.168.0.1");
-	}
-
-	@Test
-	@Deprecated
-	void customRemoteIpValveWithDeprecatedProperties() {
-		bind("server.tomcat.remote-ip-header=x-my-remote-ip-header",
-				"server.tomcat.protocol-header=x-my-protocol-header", "server.tomcat.internal-proxies=192.168.0.1",
-				"server.tomcat.host-header=x-my-forward-host", "server.tomcat.port-header=x-my-forward-port",
-				"server.tomcat.protocol-header-https-value=On");
-		TomcatServletWebServerFactory factory = customizeAndGetFactory();
-		assertThat(factory.getEngineValves()).hasSize(1);
-		Valve valve = factory.getEngineValves().iterator().next();
-		assertThat(valve).isInstanceOf(RemoteIpValve.class);
-		RemoteIpValve remoteIpValve = (RemoteIpValve) valve;
-		assertThat(remoteIpValve.getProtocolHeader()).isEqualTo("x-my-protocol-header");
-		assertThat(remoteIpValve.getProtocolHeaderHttpsValue()).isEqualTo("On");
-		assertThat(remoteIpValve.getRemoteIpHeader()).isEqualTo("x-my-remote-ip-header");
-		assertThat(remoteIpValve.getHostHeader()).isEqualTo("x-my-forward-host");
-		assertThat(remoteIpValve.getPortHeader()).isEqualTo("x-my-forward-port");
-		assertThat(remoteIpValve.getInternalProxies()).isEqualTo("192.168.0.1");
+		assertThat(remoteIpValve.getTrustedProxies()).isEqualTo("proxy1|proxy2");
 	}
 
 	@Test
@@ -317,13 +353,20 @@ class TomcatWebServerFactoryCustomizerTests {
 	}
 
 	@Test
+	void testCustomizeRejectIllegalHeader() {
+		bind("server.tomcat.reject-illegal-header=false");
+		customizeAndRunServer((server) -> assertThat(
+				((AbstractHttp11Protocol<?>) server.getTomcat().getConnector().getProtocolHandler())
+						.getRejectIllegalHeader()).isFalse());
+	}
+
+	@Test
 	void errorReportValveIsConfiguredToNotReportStackTraces() {
 		TomcatWebServer server = customizeAndGetServer();
 		Valve[] valves = server.getTomcat().getHost().getPipeline().getValves();
 		assertThat(valves).hasAtLeastOneElementOfType(ErrorReportValve.class);
 		for (Valve valve : valves) {
-			if (valve instanceof ErrorReportValve) {
-				ErrorReportValve errorReportValve = (ErrorReportValve) valve;
+			if (valve instanceof ErrorReportValve errorReportValve) {
 				assertThat(errorReportValve.isShowReport()).isFalse();
 				assertThat(errorReportValve.isShowServerInfo()).isFalse();
 			}
@@ -510,6 +553,7 @@ class TomcatWebServerFactoryCustomizerTests {
 
 	private TomcatServletWebServerFactory customizeAndGetFactory() {
 		TomcatServletWebServerFactory factory = new TomcatServletWebServerFactory(0);
+		factory.setHttp2(this.serverProperties.getHttp2());
 		this.customizer.customize(factory);
 		return factory;
 	}

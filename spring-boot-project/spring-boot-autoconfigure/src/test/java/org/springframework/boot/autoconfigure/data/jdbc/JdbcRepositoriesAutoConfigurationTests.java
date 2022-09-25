@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,16 @@ import org.springframework.boot.autoconfigure.data.jdbc.city.CityRepository;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
+import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.ManagedTypes;
+import org.springframework.data.jdbc.core.mapping.JdbcMappingContext;
 import org.springframework.data.jdbc.repository.config.AbstractJdbcConfiguration;
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
 import org.springframework.data.repository.Repository;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Andy Wilkinson
  * @author Stephane Nicoll
+ * @author Mark Paluch
  */
 class JdbcRepositoriesAutoConfigurationTests {
 
@@ -88,6 +93,19 @@ class JdbcRepositoriesAutoConfigurationTests {
 	}
 
 	@Test
+	void entityScanShouldSetManagedTypes() {
+		this.contextRunner.with(database())
+				.withConfiguration(AutoConfigurations.of(JdbcTemplateAutoConfiguration.class,
+						DataSourceTransactionManagerAutoConfiguration.class))
+				.withUserConfiguration(TestConfiguration.class).run((context) -> {
+					JdbcMappingContext mappingContext = context.getBean(JdbcMappingContext.class);
+					ManagedTypes managedTypes = (ManagedTypes) ReflectionTestUtils.getField(mappingContext,
+							"managedTypes");
+					assertThat(managedTypes.toList()).containsOnly(City.class);
+				});
+	}
+
+	@Test
 	void autoConfigurationWithNoRepositories() {
 		this.contextRunner.with(database())
 				.withConfiguration(AutoConfigurations.of(JdbcTemplateAutoConfiguration.class,
@@ -111,9 +129,12 @@ class JdbcRepositoriesAutoConfigurationTests {
 	}
 
 	private Function<ApplicationContextRunner, ApplicationContextRunner> database() {
-		return (runner) -> runner.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class))
-				.withPropertyValues("spring.datasource.schema=classpath:data-city-schema.sql",
-						"spring.datasource.data=classpath:city.sql", "spring.datasource.generate-unique-name:true");
+		return (runner) -> runner
+				.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class,
+						SqlInitializationAutoConfiguration.class))
+				.withPropertyValues("spring.sql.init.schema-locations=classpath:data-city-schema.sql",
+						"spring.sql.init.data-locations=classpath:city.sql",
+						"spring.datasource.generate-unique-name:true");
 	}
 
 	@TestAutoConfigurationPackage(City.class)

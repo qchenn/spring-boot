@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import javax.management.ReflectionException;
 
 import org.junit.jupiter.api.Test;
 
+import org.springframework.boot.LazyInitializationBeanFactoryPostProcessor;
 import org.springframework.boot.actuate.audit.InMemoryAuditEventRepository;
 import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.endpoint.jmx.JmxEndpointAutoConfiguration;
@@ -58,12 +59,24 @@ class JmxEndpointIntegrationTests {
 			.withConfiguration(AutoConfigurations.of(EndpointAutoConfigurationClasses.ALL));
 
 	@Test
-	void jmxEndpointsAreExposed() {
+	void jmxEndpointsExposeHealthByDefault() {
 		this.contextRunner.run((context) -> {
 			MBeanServer mBeanServer = context.getBean(MBeanServer.class);
-			checkEndpointMBeans(mBeanServer, new String[] { "beans", "conditions", "configprops", "env", "health",
-					"info", "mappings", "threaddump", "httptrace" }, new String[] { "shutdown" });
+			checkEndpointMBeans(mBeanServer, new String[] { "health" }, new String[] { "beans", "conditions",
+					"configprops", "env", "info", "mappings", "threaddump", "httptrace", "shutdown" });
 		});
+	}
+
+	@Test
+	void jmxEndpointsAreExposedWhenLazyInitializationIsEnabled() {
+		this.contextRunner.withPropertyValues("management.endpoints.jmx.exposure.include:*")
+				.withBean(LazyInitializationBeanFactoryPostProcessor.class,
+						LazyInitializationBeanFactoryPostProcessor::new)
+				.run((context) -> {
+					MBeanServer mBeanServer = context.getBean(MBeanServer.class);
+					checkEndpointMBeans(mBeanServer, new String[] { "beans", "conditions", "configprops", "env",
+							"health", "info", "mappings", "threaddump", "httptrace" }, new String[] { "shutdown" });
+				});
 	}
 
 	@Test

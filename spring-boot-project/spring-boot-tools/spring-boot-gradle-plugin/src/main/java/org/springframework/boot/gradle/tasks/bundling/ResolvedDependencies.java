@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.LenientConfiguration;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
-import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.artifacts.ResolvedConfiguration;
 
@@ -44,13 +45,15 @@ class ResolvedDependencies {
 
 	private final Map<Configuration, ResolvedConfigurationDependencies> configurationDependencies = new LinkedHashMap<>();
 
-	void processConfiguration(Configuration configuration) {
-		Set<String> projectDependencyIds = configuration.getAllDependencies().withType(ProjectDependency.class).stream()
-				.map((projectDependency) -> projectDependency.getGroup() + ":" + projectDependency.getName() + ":"
-						+ projectDependency.getVersion())
+	private String projectId(Project project) {
+		return project.getGroup() + ":" + project.getName() + ":" + project.getVersion();
+	}
+
+	void processConfiguration(Project project, Configuration configuration) {
+		Set<String> localProjectIds = project.getRootProject().getAllprojects().stream().map(this::projectId)
 				.collect(Collectors.toSet());
 		this.configurationDependencies.put(configuration,
-				new ResolvedConfigurationDependencies(projectDependencyIds, configuration.getResolvedConfiguration()));
+				new ResolvedConfigurationDependencies(localProjectIds, configuration.getResolvedConfiguration()));
 	}
 
 	DependencyDescriptor find(File file) {
@@ -73,7 +76,11 @@ class ResolvedDependencies {
 		ResolvedConfigurationDependencies(Set<String> projectDependencyIds,
 				ResolvedConfiguration resolvedConfiguration) {
 			if (!resolvedConfiguration.hasError()) {
-				for (ResolvedArtifact resolvedArtifact : resolvedConfiguration.getResolvedArtifacts()) {
+				LenientConfiguration lenientConfiguration = resolvedConfiguration.getLenientConfiguration();
+				// Ensure that all files are resolved, allowing Gradle to resolve in
+				// parallel if they are not
+				lenientConfiguration.getFiles();
+				for (ResolvedArtifact resolvedArtifact : lenientConfiguration.getArtifacts()) {
 					ModuleVersionIdentifier id = resolvedArtifact.getModuleVersion().getId();
 					boolean projectDependency = projectDependencyIds
 							.contains(id.getGroup() + ":" + id.getName() + ":" + id.getVersion());

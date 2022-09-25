@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,13 +24,12 @@ import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
-import org.gradle.api.JavaVersion;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.TestTemplate;
 
 import org.springframework.boot.gradle.junit.GradleCompatibility;
-import org.springframework.boot.gradle.testkit.GradleBuild;
+import org.springframework.boot.testsupport.gradle.testkit.GradleBuild;
 import org.springframework.util.FileSystemUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,7 +70,7 @@ class BootRunIntegrationTests {
 		copyMainClassApplication();
 		BuildResult result = this.gradleBuild.build("bootRun");
 		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
-		assertThat(result.getOutput()).contains("com.example.main.CustomMainClass");
+		assertThat(result.getOutput()).contains("com.example.bootrun.main.CustomMainClass");
 	}
 
 	@TestTemplate
@@ -79,7 +78,7 @@ class BootRunIntegrationTests {
 		copyMainClassApplication();
 		BuildResult result = this.gradleBuild.build("bootRun");
 		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
-		assertThat(result.getOutput()).contains("com.example.main.CustomMainClass");
+		assertThat(result.getOutput()).contains("com.example.bootrun.main.CustomMainClass");
 	}
 
 	@TestTemplate
@@ -87,7 +86,8 @@ class BootRunIntegrationTests {
 		copyClasspathApplication();
 		BuildResult result = this.gradleBuild.build("bootRun");
 		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
-		assertThat(result.getOutput()).contains("Main class name = com.example.classpath.BootRunClasspathApplication");
+		assertThat(result.getOutput())
+				.contains("Main class name = com.example.bootrun.classpath.BootRunClasspathApplication");
 	}
 
 	@TestTemplate
@@ -95,12 +95,7 @@ class BootRunIntegrationTests {
 		copyJvmArgsApplication();
 		BuildResult result = this.gradleBuild.build("bootRun");
 		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
-		if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_13)) {
-			assertThat(result.getOutput()).contains("1. -XX:TieredStopAtLevel=1");
-		}
-		else {
-			assertThat(result.getOutput()).contains("1. -Xverify:none").contains("2. -XX:TieredStopAtLevel=1");
-		}
+		assertThat(result.getOutput()).contains("-XX:TieredStopAtLevel=1");
 	}
 
 	@TestTemplate
@@ -116,14 +111,8 @@ class BootRunIntegrationTests {
 		copyJvmArgsApplication();
 		BuildResult result = this.gradleBuild.build("bootRun");
 		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
-		if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_13)) {
-			assertThat(result.getOutput()).contains("1. -Dcom.bar=baz").contains("2. -Dcom.foo=bar")
-					.contains("3. -XX:TieredStopAtLevel=1");
-		}
-		else {
-			assertThat(result.getOutput()).contains("1. -Dcom.bar=baz").contains("2. -Dcom.foo=bar")
-					.contains("3. -Xverify:none").contains("4. -XX:TieredStopAtLevel=1");
-		}
+		assertThat(result.getOutput()).contains("-Dcom.bar=baz").contains("-Dcom.foo=bar")
+				.contains("-XX:TieredStopAtLevel=1");
 	}
 
 	@TestTemplate
@@ -135,6 +124,16 @@ class BootRunIntegrationTests {
 		BuildResult result = this.gradleBuild.build("bootRun");
 		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
 		assertThat(result.getOutput()).contains("standard.jar").doesNotContain("starter.jar");
+	}
+
+	@TestTemplate
+	void classesFromASecondarySourceSetCanBeOnTheClasspath() throws IOException {
+		File output = new File(this.gradleBuild.getProjectDir(), "src/secondary/java/com/example/bootrun/main");
+		output.mkdirs();
+		FileSystemUtils.copyRecursively(new File("src/test/java/com/example/bootrun/main"), output);
+		BuildResult result = this.gradleBuild.build("bootRun");
+		assertThat(result.task(":bootRun").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
+		assertThat(result.getOutput()).contains("com.example.bootrun.main.CustomMainClass");
 	}
 
 	private void copyMainClassApplication() throws IOException {
@@ -150,9 +149,9 @@ class BootRunIntegrationTests {
 	}
 
 	private void copyApplication(String name) throws IOException {
-		File output = new File(this.gradleBuild.getProjectDir(), "src/main/java/com/example/" + name);
+		File output = new File(this.gradleBuild.getProjectDir(), "src/main/java/com/example/bootrun/" + name);
 		output.mkdirs();
-		FileSystemUtils.copyRecursively(new File("src/test/java/com/example/" + name), output);
+		FileSystemUtils.copyRecursively(new File("src/test/java/com/example/bootrun/" + name), output);
 	}
 
 	private String canonicalPathOf(String path) throws IOException {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,27 +16,35 @@
 
 package org.springframework.boot.autoconfigure.orm.jpa;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.metamodel.ManagedType;
+import jakarta.persistence.spi.PersistenceUnitInfo;
 import org.hibernate.engine.transaction.jta.platform.internal.NoJtaPlatform;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.TestAutoConfigurationPackage;
+import org.springframework.boot.autoconfigure.data.jpa.country.Country;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.test.City;
+import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.ContextConsumer;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.testsupport.BuildOutput;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,6 +53,7 @@ import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.JpaVendorAdapter;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.persistenceunit.DefaultPersistenceUnitManager;
+import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
 import org.springframework.orm.jpa.persistenceunit.PersistenceUnitManager;
 import org.springframework.orm.jpa.support.OpenEntityManagerInViewFilter;
 import org.springframework.orm.jpa.support.OpenEntityManagerInViewInterceptor;
@@ -69,9 +78,12 @@ abstract class AbstractJpaAutoConfigurationTests {
 	protected AbstractJpaAutoConfigurationTests(Class<?> autoConfiguredClass) {
 		this.autoConfiguredClass = autoConfiguredClass;
 		this.contextRunner = new ApplicationContextRunner()
-				.withPropertyValues("spring.datasource.generate-unique-name=true")
-				.withUserConfiguration(TestConfiguration.class).withConfiguration(AutoConfigurations.of(
-						DataSourceAutoConfiguration.class, TransactionAutoConfiguration.class, autoConfiguredClass));
+				.withPropertyValues("spring.datasource.generate-unique-name=true",
+						"spring.jta.log-dir="
+								+ new File(new BuildOutput(getClass()).getRootLocation(), "transaction-logs"))
+				.withUserConfiguration(TestConfiguration.class).withConfiguration(
+						AutoConfigurations.of(DataSourceAutoConfiguration.class, TransactionAutoConfiguration.class,
+								SqlInitializationAutoConfiguration.class, autoConfiguredClass));
 	}
 
 	protected ApplicationContextRunner contextRunner() {
@@ -105,6 +117,7 @@ abstract class AbstractJpaAutoConfigurationTests {
 			assertThat(context).hasSingleBean(DataSource.class);
 			assertThat(context).hasSingleBean(JpaTransactionManager.class);
 			assertThat(context).hasSingleBean(EntityManagerFactory.class);
+			assertThat(context).hasSingleBean(PersistenceManagedTypes.class);
 		});
 	}
 
@@ -114,6 +127,7 @@ abstract class AbstractJpaAutoConfigurationTests {
 			assertThat(context).getBeans(DataSource.class).hasSize(2);
 			assertThat(context).hasSingleBean(JpaTransactionManager.class);
 			assertThat(context).hasSingleBean(EntityManagerFactory.class);
+			assertThat(context).hasSingleBean(PersistenceManagedTypes.class);
 		});
 	}
 
@@ -219,6 +233,26 @@ abstract class AbstractJpaAutoConfigurationTests {
 	}
 
 	@Test
+	void defaultPersistenceManagedTypes() {
+		this.contextRunner.run((context) -> {
+			assertThat(context).hasSingleBean(PersistenceManagedTypes.class);
+			EntityManager entityManager = context.getBean(EntityManagerFactory.class).createEntityManager();
+			assertThat(getManagedJavaTypes(entityManager)).contains(City.class).doesNotContain(Country.class);
+		});
+	}
+
+	@Test
+	void customPersistenceManagedTypes() {
+		this.contextRunner
+				.withBean(PersistenceManagedTypes.class, () -> PersistenceManagedTypes.of(Country.class.getName()))
+				.run((context) -> {
+					assertThat(context).hasSingleBean(PersistenceManagedTypes.class);
+					EntityManager entityManager = context.getBean(EntityManagerFactory.class).createEntityManager();
+					assertThat(getManagedJavaTypes(entityManager)).contains(Country.class).doesNotContain(City.class);
+				});
+	}
+
+	@Test
 	void customPersistenceUnitManager() {
 		this.contextRunner.withUserConfiguration(TestConfigurationWithCustomPersistenceUnitManager.class)
 				.run((context) -> {
@@ -227,6 +261,24 @@ abstract class AbstractJpaAutoConfigurationTests {
 					assertThat(entityManagerFactoryBean).hasFieldOrPropertyWithValue("persistenceUnitManager",
 							context.getBean(PersistenceUnitManager.class));
 				});
+	}
+
+	@Test
+	void customPersistenceUnitPostProcessors() {
+		this.contextRunner.withUserConfiguration(TestConfigurationWithCustomPersistenceUnitPostProcessors.class)
+				.run((context) -> {
+					LocalContainerEntityManagerFactoryBean entityManagerFactoryBean = context
+							.getBean(LocalContainerEntityManagerFactoryBean.class);
+					PersistenceUnitInfo persistenceUnitInfo = entityManagerFactoryBean.getPersistenceUnitInfo();
+					assertThat(persistenceUnitInfo).isNotNull();
+					assertThat(persistenceUnitInfo.getManagedClassNames())
+							.contains("customized.attribute.converter.class.name");
+				});
+	}
+
+	private Class<?>[] getManagedJavaTypes(EntityManager entityManager) {
+		Set<ManagedType<?>> managedTypes = entityManager.getMetamodel().getManagedTypes();
+		return managedTypes.stream().map(ManagedType::getJavaType).toArray(Class<?>[]::new);
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -388,7 +440,18 @@ abstract class AbstractJpaAutoConfigurationTests {
 
 	}
 
-	@SuppressWarnings("serial")
+	@Configuration(proxyBeanMethods = false)
+	@TestAutoConfigurationPackage(AbstractJpaAutoConfigurationTests.class)
+	static class TestConfigurationWithCustomPersistenceUnitPostProcessors {
+
+		@Bean
+		EntityManagerFactoryBuilderCustomizer entityManagerFactoryBuilderCustomizer() {
+			return (builder) -> builder.setPersistenceUnitPostProcessors(
+					(pui) -> pui.addManagedClassName("customized.attribute.converter.class.name"));
+		}
+
+	}
+
 	static class CustomJpaTransactionManager extends JpaTransactionManager {
 
 	}

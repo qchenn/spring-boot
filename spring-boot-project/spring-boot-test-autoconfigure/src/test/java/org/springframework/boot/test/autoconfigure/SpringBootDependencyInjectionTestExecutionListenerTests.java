@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,8 +53,10 @@ class SpringBootDependencyInjectionTestExecutionListenerTests {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
 	void prepareFailingTestInstanceShouldPrintReport(CapturedOutput output) throws Exception {
 		TestContext testContext = mock(TestContext.class);
+		given(testContext.getTestClass()).willReturn((Class) Config.class);
 		given(testContext.getTestInstance()).willThrow(new IllegalStateException());
 		SpringApplication application = new SpringApplication(Config.class);
 		application.setWebApplicationType(WebApplicationType.NONE);
@@ -71,8 +73,10 @@ class SpringBootDependencyInjectionTestExecutionListenerTests {
 	}
 
 	@Test
-	void originalFailureIsThrownWhenReportGenerationFails() throws Exception {
+	@SuppressWarnings("unchecked")
+	void originalFailureIsThrownWhenReportGenerationFails() {
 		TestContext testContext = mock(TestContext.class);
+		given(testContext.getTestClass()).willReturn((Class) Config.class);
 		IllegalStateException originalFailure = new IllegalStateException();
 		given(testContext.getTestInstance()).willThrow(originalFailure);
 		SpringApplication application = new SpringApplication(Config.class);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import org.awaitility.Awaitility;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
@@ -51,6 +52,13 @@ class JettyReactiveWebServerFactoryTests extends AbstractReactiveWebServerFactor
 	@Override
 	protected JettyReactiveWebServerFactory getFactory() {
 		return new JettyReactiveWebServerFactory(0);
+	}
+
+	@Test
+	@Override
+	@Disabled("Jetty 11 does not support User-Agent-based compression")
+	protected void noCompressionForUserAgent() {
+
 	}
 
 	@Test
@@ -116,7 +124,7 @@ class JettyReactiveWebServerFactoryTests extends AbstractReactiveWebServerFactor
 	}
 
 	@Test
-	void whenServerIsShuttingDownGracefullyThenNewConnectionsCannotBeMade() throws Exception {
+	void whenServerIsShuttingDownGracefullyThenNewConnectionsCannotBeMade() {
 		JettyReactiveWebServerFactory factory = getFactory();
 		factory.setShutdown(Shutdown.GRACEFUL);
 		BlockingHandler blockingHandler = new BlockingHandler();

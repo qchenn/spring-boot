@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.springframework.boot.logging.logback;
 
 import java.nio.charset.Charset;
+import java.util.function.BiConsumer;
 
 import ch.qos.logback.core.util.FileSize;
 
@@ -66,6 +67,16 @@ public class LogbackLoggingSystemProperties extends LoggingSystemProperties {
 		super(environment);
 	}
 
+	/**
+	 * Create a new {@link LogbackLoggingSystemProperties} instance.
+	 * @param environment the source environment
+	 * @param setter setter used to apply the property
+	 * @since 2.4.3
+	 */
+	public LogbackLoggingSystemProperties(Environment environment, BiConsumer<String, String> setter) {
+		super(environment, setter);
+	}
+
 	@Override
 	protected Charset getDefaultCharset() {
 		return Charset.defaultCharset();
@@ -98,7 +109,7 @@ public class LogbackLoggingSystemProperties extends LoggingSystemProperties {
 			value = getProperty(resolver, deprecatedPropertyName, type);
 		}
 		if (value != null) {
-			String stringValue = String.valueOf((value instanceof DataSize) ? ((DataSize) value).toBytes() : value);
+			String stringValue = String.valueOf((value instanceof DataSize dataSize) ? dataSize.toBytes() : value);
 			setSystemProperty(systemPropertyName, stringValue);
 		}
 	}

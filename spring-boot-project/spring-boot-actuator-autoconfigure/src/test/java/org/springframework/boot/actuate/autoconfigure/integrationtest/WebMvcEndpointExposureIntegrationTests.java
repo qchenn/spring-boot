@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 package org.springframework.boot.actuate.autoconfigure.integrationtest;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.function.Supplier;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.actuate.audit.InMemoryAuditEventRepository;
@@ -91,7 +91,7 @@ class WebMvcEndpointExposureIntegrationTests {
 			assertThat(isExposed(client, HttpMethod.GET, "customservlet")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "env")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "health")).isTrue();
-			assertThat(isExposed(client, HttpMethod.GET, "info")).isTrue();
+			assertThat(isExposed(client, HttpMethod.GET, "info")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "mappings")).isFalse();
 			assertThat(isExposed(client, HttpMethod.POST, "shutdown")).isFalse();
 			assertThat(isExposed(client, HttpMethod.GET, "threaddump")).isFalse();
@@ -168,10 +168,10 @@ class WebMvcEndpointExposureIntegrationTests {
 		ExchangeStrategies exchangeStrategies = ExchangeStrategies.builder()
 				.codecs((configurer) -> configurer.defaultCodecs().maxInMemorySize(-1)).build();
 		return WebTestClient.bindToServer().baseUrl("http://localhost:" + port).exchangeStrategies(exchangeStrategies)
-				.build();
+				.responseTimeout(Duration.ofMinutes(5)).build();
 	}
 
-	private boolean isExposed(WebTestClient client, HttpMethod method, String path) throws Exception {
+	private boolean isExposed(WebTestClient client, HttpMethod method, String path) {
 		path = "/actuator/" + path;
 		EntityExchangeResult<byte[]> result = client.method(method).uri(path).exchange().expectBody().returnResult();
 		if (result.getStatus() == HttpStatus.OK) {

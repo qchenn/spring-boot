@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.context.properties.source.MockConfigurationPropertySource;
 import org.springframework.boot.convert.Delimiter;
 import org.springframework.core.ResolvableType;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -318,6 +319,18 @@ class JavaBeanBinderTests {
 	}
 
 	@Test
+	void bindToClassWithOverriddenPropertyShouldSetSubclassProperty() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("foo.value-bean.int-value", "123");
+		source.put("foo.value-bean.sub-int-value", "456");
+		this.sources.add(source);
+		ExampleNestedSubclassBean bean = this.binder.bind("foo", Bindable.of(ExampleNestedSubclassBean.class)).get();
+		assertThat(bean.getValueBean()).isNotNull();
+		assertThat(bean.getValueBean().getIntValue()).isEqualTo(123);
+		assertThat(bean.getValueBean().getSubIntValue()).isEqualTo(456);
+	}
+
+	@Test
 	void bindToClassWhenPropertiesMissingShouldReturnUnbound() {
 		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
 		source.put("faf.int-value", "12");
@@ -340,7 +353,7 @@ class JavaBeanBinderTests {
 
 	@Test
 	void bindToInstanceWhenNoDefaultConstructorShouldBind() {
-		Binder binder = new Binder(this.sources, null, null, null, null,
+		Binder binder = new Binder(this.sources, null, (ConversionService) null, null, null,
 				(bindable, isNestedConstructorBinding) -> null);
 		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
 		source.put("foo.value", "bar");
@@ -797,6 +810,35 @@ class JavaBeanBinderTests {
 
 			String getFoo() {
 				return "foo";
+			}
+
+		}
+
+	}
+
+	static class ExampleNestedSubclassBean extends ExampleNestedBean {
+
+		private ExampleValueSubclassBean valueBean;
+
+		@Override
+		ExampleValueSubclassBean getValueBean() {
+			return this.valueBean;
+		}
+
+		void setValueBean(ExampleValueSubclassBean valueBean) {
+			this.valueBean = valueBean;
+		}
+
+		static class ExampleValueSubclassBean extends ExampleValueBean {
+
+			private int subIntValue;
+
+			int getSubIntValue() {
+				return this.subIntValue;
+			}
+
+			void setSubIntValue(int intValue) {
+				this.subIntValue = intValue;
 			}
 
 		}
