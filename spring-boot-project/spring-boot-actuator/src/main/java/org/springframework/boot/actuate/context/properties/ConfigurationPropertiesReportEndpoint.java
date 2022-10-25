@@ -40,6 +40,7 @@ import com.fasterxml.jackson.databind.introspect.Annotated;
 import com.fasterxml.jackson.databind.introspect.AnnotatedMethod;
 import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.BeanSerializerFactory;
 import com.fasterxml.jackson.databind.ser.BeanSerializerModifier;
@@ -47,6 +48,7 @@ import com.fasterxml.jackson.databind.ser.PropertyWriter;
 import com.fasterxml.jackson.databind.ser.SerializerFactory;
 import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
 import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -62,7 +64,7 @@ import org.springframework.boot.actuate.endpoint.annotation.Selector;
 import org.springframework.boot.context.properties.BoundConfigurationProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBean;
-import org.springframework.boot.context.properties.ConfigurationPropertiesBindConstructorProvider;
+import org.springframework.boot.context.properties.bind.BindConstructorProvider;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Name;
 import org.springframework.boot.context.properties.source.ConfigurationProperty;
@@ -78,6 +80,7 @@ import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.core.env.PropertySource;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.util.unit.DataSize;
 
 /**
  * {@link Endpoint @Endpoint} to expose application properties from
@@ -175,12 +178,12 @@ public class ConfigurationPropertiesReportEndpoint implements ApplicationContext
 		builder.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
 		builder.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 		builder.configure(SerializationFeature.WRITE_DURATIONS_AS_TIMESTAMPS, false);
-		JsonMapper.builder();
 		builder.configure(MapperFeature.USE_STD_BEAN_NAMING, true);
 		builder.serializationInclusion(Include.NON_NULL);
 		applyConfigurationPropertiesFilter(builder);
 		applySerializationModifier(builder);
 		builder.addModule(new JavaTimeModule());
+		builder.addModule(new ConfigurationPropertiesModule());
 	}
 
 	private void applyConfigurationPropertiesFilter(JsonMapper.Builder builder) {
@@ -464,6 +467,17 @@ public class ConfigurationPropertiesReportEndpoint implements ApplicationContext
 	}
 
 	/**
+	 * {@link SimpleModule} for configure the serializer.
+	 */
+	private static final class ConfigurationPropertiesModule extends SimpleModule {
+
+		private ConfigurationPropertiesModule() {
+			addSerializer(DataSize.class, ToStringSerializer.instance);
+		}
+
+	}
+
+	/**
 	 * {@link BeanSerializerModifier} to return only relevant configuration properties.
 	 */
 	protected static class GenericSerializerModifier extends BeanSerializerModifier {
@@ -476,8 +490,7 @@ public class ConfigurationPropertiesReportEndpoint implements ApplicationContext
 			List<BeanPropertyWriter> result = new ArrayList<>();
 			Class<?> beanClass = beanDesc.getType().getRawClass();
 			Bindable<?> bindable = Bindable.of(ClassUtils.getUserClass(beanClass));
-			Constructor<?> bindConstructor = ConfigurationPropertiesBindConstructorProvider.INSTANCE
-					.getBindConstructor(bindable, false);
+			Constructor<?> bindConstructor = BindConstructorProvider.DEFAULT.getBindConstructor(bindable, false);
 			for (BeanPropertyWriter writer : beanProperties) {
 				if (isCandidate(beanDesc, writer, bindConstructor)) {
 					result.add(writer);

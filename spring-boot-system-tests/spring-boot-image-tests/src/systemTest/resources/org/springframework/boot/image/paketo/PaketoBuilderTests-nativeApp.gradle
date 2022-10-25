@@ -2,7 +2,7 @@ plugins {
 	id 'org.springframework.boot' version '{bootVersion}'
 	id 'org.springframework.boot.aot' version '{bootVersion}'
 	id 'io.spring.dependency-management' version '{dependencyManagementPluginVersion}'
-	id 'org.graalvm.buildtools.native' version '0.9.14'
+	id 'org.graalvm.buildtools.native' version '{nativeBuildToolsVersion}'
 	id 'java'
 }
 
@@ -36,4 +36,8 @@ bootJar {
 bootBuildImage {
 	builder = 'paketobuildpacks/builder:tiny'
 	environment = ['BP_NATIVE_IMAGE': 'true']
+	buildpacks = [
+			"gcr.io/paketo-buildpacks/bellsoft-liberica:9.9.0-ea",
+			"urn:cnb:builder:paketo-buildpacks/java-native-image"
+	]
 }

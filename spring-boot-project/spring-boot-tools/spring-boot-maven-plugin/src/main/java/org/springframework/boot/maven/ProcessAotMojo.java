@@ -40,7 +40,7 @@ import org.springframework.util.ObjectUtils;
 		requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class ProcessAotMojo extends AbstractAotMojo {
 
-	private static final String AOT_PROCESSOR_CLASS_NAME = "org.springframework.boot.AotProcessor";
+	private static final String AOT_PROCESSOR_CLASS_NAME = "org.springframework.boot.SpringApplicationAotProcessor";
 
 	/**
 	 * Directory containing the classes and resource files that should be packaged into
@@ -75,6 +75,12 @@ public class ProcessAotMojo extends AbstractAotMojo {
 	private String mainClass;
 
 	/**
+	 * Application arguments that should be taken into account for AOT processing.
+	 */
+	@Parameter
+	private String[] arguments;
+
+	/**
 	 * Spring profiles to take into account for AOT processing.
 	 */
 	@Parameter
@@ -87,8 +93,7 @@ public class ProcessAotMojo extends AbstractAotMojo {
 		URL[] classPath = getClassPath();
 		generateAotAssets(classPath, AOT_PROCESSOR_CLASS_NAME, getAotArguments(applicationClass));
 		compileSourceFiles(classPath, this.generatedSources, this.classesDirectory);
-		copyAll(this.generatedResources.toPath().resolve("META-INF/native-image"),
-				this.classesDirectory.toPath().resolve("META-INF/native-image"));
+		copyAll(this.generatedResources.toPath(), this.classesDirectory.toPath());
 		copyAll(this.generatedClasses.toPath(), this.classesDirectory.toPath());
 	}
 
@@ -100,15 +105,21 @@ public class ProcessAotMojo extends AbstractAotMojo {
 		aotArguments.add(this.generatedClasses.toString());
 		aotArguments.add(this.project.getGroupId());
 		aotArguments.add(this.project.getArtifactId());
-		if (!ObjectUtils.isEmpty(this.profiles)) {
-			aotArguments.add("--spring.profiles.active=" + String.join(",", this.profiles));
-		}
+		aotArguments.addAll(resolveArguments().getArgs());
 		return aotArguments.toArray(String[]::new);
 	}
 
-	protected URL[] getClassPath() throws Exception {
+	private URL[] getClassPath() throws Exception {
 		File[] directories = new File[] { this.classesDirectory, this.generatedClasses };
 		return getClassPath(directories, new ExcludeTestScopeArtifactFilter());
+	}
+
+	private RunArguments resolveArguments() {
+		RunArguments runArguments = new RunArguments(this.arguments);
+		if (!ObjectUtils.isEmpty(this.profiles)) {
+			runArguments.getArgs().addFirst("--spring.profiles.active=" + String.join(",", this.profiles));
+		}
+		return runArguments;
 	}
 
 }

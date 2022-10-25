@@ -236,6 +236,14 @@ publishing.publications.withType(MavenPublication) {
 							plugin {
 								delegate.groupId('org.springframework.boot')
 								delegate.artifactId('spring-boot-maven-plugin')
+								configuration {
+									image {
+										delegate.builder("paketobuildpacks/builder:tiny");
+										env {
+											delegate.BP_NATIVE_IMAGE("true")
+										}
+									}
+								}
 								executions {
 									execution {
 										delegate.id('process-aot')
@@ -256,9 +264,9 @@ publishing.publications.withType(MavenPublication) {
 								}
 								executions {
 									execution {
-										delegate.id('native-compile')
+										delegate.id('add-reachability-metadata')
 										goals {
-											delegate.goal('compile-no-fork')
+											delegate.goal('add-reachability-metadata')
 										}
 									}
 								}

@@ -16,25 +16,24 @@
 
 package org.springframework.boot.gradle.plugin;
 
-import java.io.File;
-import java.net.URI;
-import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.graalvm.buildtools.gradle.NativeImagePlugin;
 import org.graalvm.buildtools.gradle.dsl.GraalVMExtension;
 import org.graalvm.buildtools.gradle.dsl.GraalVMReachabilityMetadataRepositoryExtension;
-import org.graalvm.buildtools.gradle.dsl.NativeImageOptions;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
-import org.gradle.api.file.FileCopyDetails;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
-import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.SourceSetOutput;
 
+import org.springframework.boot.gradle.tasks.bundling.BootBuildImage;
 import org.springframework.boot.gradle.tasks.bundling.BootJar;
 
 /**
@@ -59,19 +58,33 @@ class NativeImagePluginAction implements PluginApplicationAction {
 			JavaPluginExtension javaPluginExtension = project.getExtensions().getByType(JavaPluginExtension.class);
 			SourceSetContainer sourceSets = javaPluginExtension.getSourceSets();
 			GraalVMExtension graalVmExtension = configureGraalVmExtension(project);
-			configureNativeBinaryClasspath(sourceSets, graalVmExtension, NativeImagePlugin.NATIVE_MAIN_EXTENSION,
-					SpringBootAotPlugin.AOT_SOURCE_SET_NAME);
-			configureNativeBinaryClasspath(sourceSets, graalVmExtension, NativeImagePlugin.NATIVE_TEST_EXTENSION,
+			configureMainNativeBinaryClasspath(project, sourceSets, graalVmExtension);
+			configureTestNativeBinaryClasspath(sourceSets, graalVmExtension,
 					SpringBootAotPlugin.AOT_TEST_SOURCE_SET_NAME);
 			configureGraalVmReachabilityExtension(graalVmExtension);
-			copyReachabilityMetadataToBootJar(project, graalVmExtension);
+			copyReachabilityMetadataToBootJar(project);
+			configureBootBuildImageToProduceANativeImage(project);
 		});
 	}
 
-	private void configureNativeBinaryClasspath(SourceSetContainer sourceSets, GraalVMExtension graalVmExtension,
-			String binaryName, String sourceSetName) {
-		SourceSetOutput output = sourceSets.getByName(sourceSetName).getOutput();
-		graalVmExtension.getBinaries().getByName(binaryName).classpath(output);
+	private void configureMainNativeBinaryClasspath(Project project, SourceSetContainer sourceSets,
+			GraalVMExtension graalVmExtension) {
+		SourceSetOutput output = sourceSets.getByName(SpringBootAotPlugin.AOT_SOURCE_SET_NAME).getOutput();
+		graalVmExtension.getBinaries().getByName(NativeImagePlugin.NATIVE_MAIN_EXTENSION).classpath(output);
+		Configuration nativeImageClasspath = project.getConfigurations().getByName("nativeImageClasspath");
+		nativeImageClasspath.setExtendsFrom(removeDevelopmentOnly(nativeImageClasspath.getExtendsFrom()));
+	}
+
+	private Iterable<Configuration> removeDevelopmentOnly(Set<Configuration> configurations) {
+		return configurations.stream().filter((
+				configuration) -> !SpringBootPlugin.DEVELOPMENT_ONLY_CONFIGURATION_NAME.equals(configuration.getName()))
+				.collect(Collectors.toCollection(LinkedHashSet::new));
+	}
+
+	private void configureTestNativeBinaryClasspath(SourceSetContainer sourceSets, GraalVMExtension graalVmExtension,
+			String sourceSetName) {
+		SourceSetOutput output = sourceSets.getByName(SpringBootAotPlugin.AOT_TEST_SOURCE_SET_NAME).getOutput();
+		graalVmExtension.getBinaries().getByName(NativeImagePlugin.NATIVE_TEST_EXTENSION).classpath(output);
 	}
 
 	private GraalVMExtension configureGraalVmExtension(Project project) {
@@ -86,33 +99,17 @@ class NativeImagePluginAction implements PluginApplicationAction {
 		extension.getEnabled().set(true);
 	}
 
-	private void copyReachabilityMetadataToBootJar(Project project, GraalVMExtension graalVmExtension) {
-		Path repositoryCacheDir = new File(project.getGradle().getGradleUserHomeDir(),
-				"native-build-tools/repositories").toPath();
-
-		project.getTasks().named(SpringBootPlugin.BOOT_JAR_TASK_NAME, BootJar.class).configure((bootJar) -> {
-			NativeImageOptions options = graalVmExtension.getBinaries().named(NativeImagePlugin.NATIVE_MAIN_EXTENSION)
-					.get();
-			GraalVMReachabilityMetadataRepositoryExtension metadataRepositoryExtension = ((ExtensionAware) graalVmExtension)
-					.getExtensions().getByType(GraalVMReachabilityMetadataRepositoryExtension.class);
-			Property<URI> metadataRepositoryUri = metadataRepositoryExtension.getUri();
-			bootJar.from(options.getConfigurationFileDirectories())
-					.eachFile((file) -> normalizePathIfNecessary(repositoryCacheDir, metadataRepositoryUri, file));
-		});
+	private void copyReachabilityMetadataToBootJar(Project project) {
+		project.getTasks().named(SpringBootPlugin.BOOT_JAR_TASK_NAME, BootJar.class)
+				.configure((bootJar) -> bootJar.from(project.getTasks().named("collectReachabilityMetadata")));
 	}
 
-	private void normalizePathIfNecessary(Path repositoryCacheDir, Property<URI> metadataRepositoryUri,
-			FileCopyDetails configurationFile) {
-		Path configurationFilePath = configurationFile.getFile().toPath();
-		Path repositoryMetadataRoot = ("file".equals(metadataRepositoryUri.get().getScheme()))
-				? Path.of(metadataRepositoryUri.get()) : repositoryCacheDir;
-		if (configurationFilePath.startsWith(repositoryMetadataRoot)) {
-			Path versionDir = configurationFilePath.getParent();
-			Path artifactDir = versionDir.getParent();
-			Path groupDir = artifactDir.getParent();
-			Path gavParentDir = groupDir.getParent();
-			configurationFile.setPath("/META-INF/native-image/" + gavParentDir.relativize(configurationFilePath));
-		}
+	private void configureBootBuildImageToProduceANativeImage(Project project) {
+		project.getTasks().named(SpringBootPlugin.BOOT_BUILD_IMAGE_TASK_NAME, BootBuildImage.class)
+				.configure((bootBuildImage) -> {
+					bootBuildImage.getBuilder().convention("paketobuildpacks/builder:tiny");
+					bootBuildImage.getEnvironment().put("BP_NATIVE_IMAGE", "true");
+				});
 	}
 
 }

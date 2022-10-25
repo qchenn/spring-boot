@@ -1886,6 +1886,32 @@
       }
     },
     {
+      "name": "management.metrics.graphql.autotime.enabled",
+      "description": "Whether to automatically time web client requests.",
+      "defaultValue": true,
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
+    },
+    {
+      "name": "management.metrics.graphql.autotime.percentiles",
+      "description": "Computed non-aggregable percentiles to publish.",
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
+    },
+    {
+      "name": "management.metrics.graphql.autotime.percentiles-histogram",
+      "description": "Whether percentile histograms should be published.",
+      "defaultValue": false,
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
+    },
+    {
       "name": "management.metrics.mongo.command.enabled",
       "description": "Whether to enable Mongo client command metrics.",
       "defaultValue": true
@@ -1905,16 +1931,28 @@
     {
       "name": "management.metrics.web.client.request.autotime.enabled",
       "description": "Whether to automatically time web client requests.",
-      "defaultValue": true
+      "defaultValue": true,
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
     },
     {
       "name": "management.metrics.web.client.request.autotime.percentiles",
-      "description": "Computed non-aggregable percentiles to publish."
+      "description": "Computed non-aggregable percentiles to publish.",
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
     },
     {
       "name": "management.metrics.web.client.request.autotime.percentiles-histogram",
       "description": "Whether percentile histograms should be published.",
-      "defaultValue": false
+      "defaultValue": false,
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
     },
     {
       "name": "management.metrics.web.client.requests-metric-name",
@@ -1935,16 +1973,36 @@
     {
       "name": "management.metrics.web.server.request.autotime.enabled",
       "description": "Whether to automatically time web server requests.",
-      "defaultValue": true
+      "defaultValue": true,
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
     },
     {
       "name": "management.metrics.web.server.request.autotime.percentiles",
-      "description": "Computed non-aggregable percentiles to publish."
+      "description": "Computed non-aggregable percentiles to publish.",
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
     },
     {
       "name": "management.metrics.web.server.request.autotime.percentiles-histogram",
       "description": "Whether percentile histograms should be published.",
-      "defaultValue": false
+      "defaultValue": false,
+      "deprecation": {
+        "level": "error",
+        "reason": "Should be applied at the ObservationRegistry level."
+      }
+    },
+    {
+      "name": "management.metrics.web.server.request.ignore-trailing-slash",
+      "type": "java.lang.Boolean",
+      "deprecation": {
+        "level": "error",
+        "reason": "Not needed anymore, direct instrumentation in Spring MVC."
+      }
     },
     {
       "name": "management.metrics.web.server.requests-metric-name",
@@ -2086,6 +2144,10 @@
         "replacement": "management.trace.http.include",
         "level": "error"
       }
+    },
+    {
+      "name": "management.tracing.propagation.type",
+      "defaultValue": "W3C"
     }
   ],
   "hints": [

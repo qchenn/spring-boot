@@ -115,6 +115,17 @@ dependencies {
 	optional("org.hibernate.orm:hibernate-core")
 	optional("org.hibernate.orm:hibernate-jcache")
 	optional("org.hibernate.validator:hibernate-validator")
+	optional("org.infinispan:infinispan-commons-jakarta")
+	optional("org.infinispan:infinispan-component-annotations")
+	optional("org.infinispan:infinispan-core-jakarta")
+	optional("org.infinispan:infinispan-jcache") {
+		exclude group: "org.infinispan", module: "infinispan-commons"
+		exclude group: "org.infinispan", module: "infinispan-core"
+	}
+	optional("org.infinispan:infinispan-spring5-embedded") {
+		exclude group: "org.infinispan", module: "infinispan-commons"
+		exclude group: "org.infinispan", module: "infinispan-core"
+	}
 	optional("org.influxdb:influxdb-java")
 	optional("org.jooq:jooq") {
 		exclude group: "javax.xml.bind", module: "jaxb-api"
@@ -127,6 +138,9 @@ dependencies {
 	}
 	optional("org.mongodb:mongodb-driver-reactivestreams")
 	optional("org.mongodb:mongodb-driver-sync")
+	optional("org.opensaml:opensaml-core:4.0.1")
+	optional("org.opensaml:opensaml-saml-api:4.0.1")
+	optional("org.opensaml:opensaml-saml-impl:4.0.1")
 	optional("org.quartz-scheduler:quartz")
 	optional("org.springframework:spring-jdbc")
 	optional("org.springframework.integration:spring-integration-core")
@@ -174,7 +188,11 @@ dependencies {
 	optional("org.springframework.security:spring-security-oauth2-jose")
 	optional("org.springframework.security:spring-security-oauth2-resource-server")
 	optional("org.springframework.security:spring-security-rsocket")
-	optional("org.springframework.security:spring-security-saml2-service-provider")
+	optional("org.springframework.security:spring-security-saml2-service-provider") {
+		exclude group: "org.opensaml", module: "opensaml-core"
+		exclude group: "org.opensaml", module: "opensaml-saml-api"
+		exclude group: "org.opensaml", module: "opensaml-saml-impl"
+	}
 	optional("org.springframework.security:spring-security-web")
 	optional("org.springframework.session:spring-session-core")
 	optional("org.springframework.session:spring-session-data-mongodb")
@@ -193,7 +211,6 @@ dependencies {
 	}
 	optional("org.thymeleaf:thymeleaf")
 	optional("org.thymeleaf:thymeleaf-spring6")
-	optional("org.thymeleaf.extras:thymeleaf-extras-java8time")
 	optional("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
 	optional("redis.clients:jedis")
 
@@ -204,6 +221,7 @@ dependencies {
 	testImplementation("com.github.h-thurow:simple-jndi")
 	testImplementation("com.ibm.db2:jcc")
 	testImplementation("com.jayway.jsonpath:json-path")
+	testImplementation("com.mysql:mysql-connector-j")
 	testImplementation("com.querydsl:querydsl-core")
 	testImplementation("com.squareup.okhttp3:mockwebserver")
 	testImplementation("com.sun.xml.messaging.saaj:saaj-impl")
@@ -211,7 +229,6 @@ dependencies {
 	testImplementation("io.r2dbc:r2dbc-h2")
 	testImplementation("jakarta.json:jakarta.json-api")
 	testImplementation("jakarta.xml.ws:jakarta.xml.ws-api")
-	testImplementation("mysql:mysql-connector-java")
 	testImplementation("org.apache.logging.log4j:log4j-to-slf4j")
 	testImplementation("org.apache.tomcat.embed:tomcat-embed-jasper")
 	testImplementation("org.assertj:assertj-core")
@@ -224,6 +241,7 @@ dependencies {
 	testImplementation("org.mockito:mockito-junit-jupiter")
 	testImplementation("org.skyscreamer:jsonassert")
 	testImplementation("org.springframework:spring-test")
+	testImplementation("org.springframework:spring-core-test")
 	testImplementation("org.springframework.graphql:spring-graphql-test")
 	testImplementation("org.springframework.kafka:spring-kafka-test")
 	testImplementation("org.springframework.security:spring-security-test")

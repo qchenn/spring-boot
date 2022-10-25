@@ -67,7 +67,7 @@ org.springframework.boot.actuate.autoconfigure.metrics.export.simple.SimpleMetri
 org.springframework.boot.actuate.autoconfigure.metrics.export.stackdriver.StackdriverMetricsExportAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.export.statsd.StatsdMetricsExportAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.export.wavefront.WavefrontMetricsExportAutoConfiguration
-org.springframework.boot.actuate.autoconfigure.metrics.graphql.GraphQlMetricsAutoConfiguration
+org.springframework.boot.actuate.autoconfigure.observation.graphql.GraphQlObservationAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.integration.IntegrationMetricsAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.jdbc.DataSourcePoolMetricsAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.jersey.JerseyServerMetricsAutoConfiguration
@@ -77,15 +77,15 @@ org.springframework.boot.actuate.autoconfigure.metrics.r2dbc.ConnectionPoolMetri
 org.springframework.boot.actuate.autoconfigure.metrics.redis.LettuceMetricsAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.startup.StartupTimeMetricsListenerAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.task.TaskExecutorMetricsAutoConfiguration
-org.springframework.boot.actuate.autoconfigure.metrics.web.client.HttpClientMetricsAutoConfiguration
+org.springframework.boot.actuate.autoconfigure.observation.web.client.HttpClientObservationsAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.web.jetty.JettyMetricsAutoConfiguration
-org.springframework.boot.actuate.autoconfigure.metrics.web.reactive.WebFluxMetricsAutoConfiguration
-org.springframework.boot.actuate.autoconfigure.metrics.web.servlet.WebMvcMetricsAutoConfiguration
+org.springframework.boot.actuate.autoconfigure.observation.web.reactive.WebFluxObservationAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.metrics.web.tomcat.TomcatMetricsAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.data.mongo.MongoHealthContributorAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.data.mongo.MongoReactiveHealthContributorAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.neo4j.Neo4jHealthContributorAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration
+org.springframework.boot.actuate.autoconfigure.observation.web.servlet.WebMvcObservationAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.quartz.QuartzEndpointAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.r2dbc.ConnectionFactoryHealthContributorAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.data.redis.RedisHealthContributorAutoConfiguration
@@ -101,6 +101,7 @@ org.springframework.boot.actuate.autoconfigure.trace.http.HttpTraceEndpointAutoC
 org.springframework.boot.actuate.autoconfigure.tracing.BraveAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.tracing.MicrometerTracingAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.tracing.OpenTelemetryAutoConfiguration
+org.springframework.boot.actuate.autoconfigure.tracing.exemplars.ExemplarsAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.tracing.wavefront.WavefrontTracingAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration
 org.springframework.boot.actuate.autoconfigure.web.mappings.MappingsEndpointAutoConfiguration
